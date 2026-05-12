@@ -57,7 +57,9 @@ select = [
     "SIM",  # flake8-simplify
     "TID",  # flake8-tidy-imports
 ]
-ignore = []
+ignore = [
+    "B008",  # FastAPI Depends()를 함수 default로 쓰는 표준 패턴 — false positive
+]
 
 [tool.ruff.lint.isort]
 known-first-party = ["the_commons"]
