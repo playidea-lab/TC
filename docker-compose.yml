@@ -1,0 +1,21 @@
+services:
+  postgres:
+    image: pgvector/pgvector:pg16
+    container_name: the_commons_pg
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: commons
+      POSTGRES_USER: commons
+      POSTGRES_PASSWORD: changeme
+    ports:
+      - "5432:5432"
+    volumes:
+      - the_commons_pg_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U commons -d commons"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  the_commons_pg_data:
