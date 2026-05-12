@@ -41,6 +41,33 @@ class EvidenceStore(Protocol):
         """ID로 단건 조회. 없으면 None."""
         ...
 
+    async def list_active_synthetics_in_bucket(
+        self,
+        *,
+        modality: str,
+        sample_count_band: str,
+        intent_goal: str,
+    ) -> list[Evidence]:
+        """같은 bucket의 active(deprecated=FALSE) synthetic evidence 조회.
+
+        ingest 후 promote/contradict 평가용.
+        """
+        ...
+
+    async def count_real_in_bucket(
+        self,
+        *,
+        modality: str,
+        sample_count_band: str,
+        intent_goal: str,
+    ) -> int:
+        """같은 bucket의 real evidence 개수. retirement 트리거 판정용."""
+        ...
+
+    async def mark_deprecated(self, evidence_id: str, *, reason: str) -> None:
+        """L3 visibility 플래그 ON — 추천 corpus에서 제외 (record는 보존)."""
+        ...
+
 
 # ----------------------------------------------------------------------------
 # In-memory (test)
@@ -53,6 +80,7 @@ class InMemoryEvidenceStore:
     def __init__(self) -> None:
         self._by_id: dict[str, Evidence] = {}
         self._hashes: set[str] = set()
+        self._deprecated: set[str] = set()
 
     async def insert(self, evidence: Evidence) -> None:
         if evidence.evidence_id in self._by_id:
@@ -68,6 +96,45 @@ class InMemoryEvidenceStore:
 
     async def get_by_id(self, evidence_id: str) -> Evidence | None:
         return self._by_id.get(evidence_id)
+
+    async def list_active_synthetics_in_bucket(
+        self,
+        *,
+        modality: str,
+        sample_count_band: str,
+        intent_goal: str,
+    ) -> list[Evidence]:
+        return [
+            ev
+            for ev in self._by_id.values()
+            if ev.tier == "synthetic"
+            and ev.evidence_id not in self._deprecated
+            and ev.data_fingerprint.modality == modality
+            and ev.data_fingerprint.sample_count_band == sample_count_band
+            and ev.intent.goal == intent_goal
+        ]
+
+    async def count_real_in_bucket(
+        self,
+        *,
+        modality: str,
+        sample_count_band: str,
+        intent_goal: str,
+    ) -> int:
+        return sum(
+            1
+            for ev in self._by_id.values()
+            if ev.tier == "real"
+            and ev.data_fingerprint.modality == modality
+            and ev.data_fingerprint.sample_count_band == sample_count_band
+            and ev.intent.goal == intent_goal
+        )
+
+    async def mark_deprecated(self, evidence_id: str, *, reason: str) -> None:
+        if evidence_id not in self._by_id:
+            return
+        self._deprecated.add(evidence_id)
+        _ = reason  # InMemory엔 audit log 별도 — RetirementBackend가 처리
 
 
 # ----------------------------------------------------------------------------
@@ -94,6 +161,30 @@ VALUES (
 
 _SELECT_BY_ID_SQL = "SELECT run_record FROM evidence WHERE evidence_id = %s"
 
+_LIST_ACTIVE_SYNTHETICS_SQL = """
+SELECT run_record
+FROM evidence
+WHERE tier = 'synthetic'
+  AND deprecated = FALSE
+  AND modality = %s
+  AND sample_count_band = %s
+  AND intent_goal = %s
+"""
+
+_COUNT_REAL_SQL = """
+SELECT COUNT(*) FROM evidence
+WHERE tier = 'real'
+  AND modality = %s
+  AND sample_count_band = %s
+  AND intent_goal = %s
+"""
+
+_MARK_DEPRECATED_SQL = """
+UPDATE evidence
+SET deprecated = TRUE, deprecated_reason = %s, deprecated_at = NOW()
+WHERE evidence_id = %s AND deprecated = FALSE
+"""
+
 
 class PostgresEvidenceStore:
     """psycopg 3 async 기반 PostgreSQL 구현체."""
@@ -117,10 +208,48 @@ class PostgresEvidenceStore:
             row = await cur.fetchone()
         if row is None:
             return None
-        run_record_json = row[0]
-        if isinstance(run_record_json, str):
-            run_record_json = json.loads(run_record_json)
-        return Evidence.model_validate(run_record_json)
+        return _row_to_evidence(row[0])
+
+    async def list_active_synthetics_in_bucket(
+        self,
+        *,
+        modality: str,
+        sample_count_band: str,
+        intent_goal: str,
+    ) -> list[Evidence]:
+        async with self._conn.cursor() as cur:
+            await cur.execute(
+                _LIST_ACTIVE_SYNTHETICS_SQL,
+                (modality, sample_count_band, intent_goal),
+            )
+            rows = await cur.fetchall()
+        return [_row_to_evidence(row[0]) for row in rows]
+
+    async def count_real_in_bucket(
+        self,
+        *,
+        modality: str,
+        sample_count_band: str,
+        intent_goal: str,
+    ) -> int:
+        async with self._conn.cursor() as cur:
+            await cur.execute(
+                _COUNT_REAL_SQL, (modality, sample_count_band, intent_goal)
+            )
+            row = await cur.fetchone()
+        return int(row[0]) if row else 0
+
+    async def mark_deprecated(self, evidence_id: str, *, reason: str) -> None:
+        async with self._conn.cursor() as cur:
+            await cur.execute(_MARK_DEPRECATED_SQL, (reason, evidence_id))
+        await self._conn.commit()
+
+
+def _row_to_evidence(run_record_json: Any) -> Evidence:
+    """JSONB row → Evidence."""
+    if isinstance(run_record_json, str):
+        run_record_json = json.loads(run_record_json)
+    return Evidence.model_validate(run_record_json)
 
 
 # ----------------------------------------------------------------------------

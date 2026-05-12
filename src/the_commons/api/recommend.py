@@ -5,9 +5,13 @@ from typing import Any
 from fastapi import APIRouter, Depends
 from pydantic import BaseModel
 
-from the_commons.api.dependencies import get_evidence_store
+from the_commons.api.dependencies import (
+    get_evidence_store,
+    get_reciprocity_store,
+)
 from the_commons.auth.dependencies import require_contributor
 from the_commons.auth.jwt_verify import VerifiedClaims
+from the_commons.ingestion.cluster_impact import compute_problem_cluster_bucket
 from the_commons.library.store import EvidenceStore
 from the_commons.llm.gemini import GeminiEmbedding2Provider, GeminiFlash25Reranker
 from the_commons.llm.protocol import EmbeddingProvider, LLMReranker
@@ -15,6 +19,8 @@ from the_commons.matchmaker.composer import ComposedCandidate, CorpusContext
 from the_commons.matchmaker.retriever import PgvectorVectorIndex, VectorIndex
 from the_commons.matchmaker.serializer import QueryFeatures
 from the_commons.matchmaker.service import MatchmakerService
+from the_commons.reciprocity.event_store import ReciprocityEventStore
+from the_commons.reciprocity.loop_closure import record_loop_closures
 
 router = APIRouter(tags=["recommend"])
 
@@ -93,16 +99,41 @@ async def recommend(
     body: RecommendRequest,
     claims: VerifiedClaims = Depends(require_contributor),
     service: MatchmakerService = Depends(get_matchmaker_service),
+    reciprocity: ReciprocityEventStore = Depends(get_reciprocity_store),
 ) -> RecommendResponse:
-    """query → top-N recipe 추천 + 근거 evidence IDs + corpus context."""
-    _ = claims
+    """query → top-N recipe 추천 + 근거 evidence IDs + corpus context.
+
+    응답에 포함된 evidence_id 각각에 대해 loop_closure event 자동 기록.
+    """
     result = await service.recommend(body.query)
+
+    # consumer origin을 claim에서 추출 — v0.1엔 모두 'external'로 처리 가능 (CQ가 식별)
+    consumer_origin = _resolve_origin(claims)
+
+    cited_ids = [eid for c in result.candidates for eid in c.evidence_ids]
+    cluster_bucket = compute_problem_cluster_bucket(body.query.model_dump(mode="json"))
+
+    await record_loop_closures(
+        reciprocity,
+        consumer_contributor_id=claims.contributor_id,
+        consumer_origin=consumer_origin,
+        cited_evidence_ids=cited_ids,
+        cluster_bucket=cluster_bucket,
+    )
 
     return RecommendResponse(
         corpus_context=_corpus_to_out(result.corpus_context),
         candidates=[_candidate_to_out(c) for c in result.candidates],
         template_version=result.template_version,
     )
+
+
+def _resolve_origin(claims: VerifiedClaims) -> str:
+    """JWT claim에서 outreach_origin 추출. v0.1엔 raw_claims['origin'] fallback 'external'."""
+    origin = claims.raw_claims.get("origin")
+    if origin in ("internal", "external"):
+        return str(origin)
+    return "external"
 
 
 def _corpus_to_out(c: CorpusContext) -> CorpusContextOut:

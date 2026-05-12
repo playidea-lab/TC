@@ -20,6 +20,10 @@ class ClusterImpact(BaseModel):
 
     promoted_synthetic_ids: list[str] = Field(default_factory=list)
     contradicted_synthetic_ids: list[str] = Field(default_factory=list)
+    retired_synthetic_ids: list[str] = Field(
+        default_factory=list,
+        description="real_count가 threshold 도달 시 deprecated 처리된 synthetic IDs",
+    )
     cluster_bucket: str | None = None
 
 
