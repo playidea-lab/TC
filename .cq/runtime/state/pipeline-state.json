@@ -1,0 +1,15 @@
+{
+  "steps": ["plan", "run", "finish"],
+  "current": 0,
+  "auto": true,
+  "source": "pi",
+  "idea_slug": "the-commons-v0.1-design",
+  "related_ideas": [
+    "the-commons-vision",
+    "the-commons-architecture",
+    "the-commons-v0.1-design",
+    "the-commons-onboarding",
+    "the-commons-success-metrics"
+  ],
+  "notes": "Five /pi cycles crystallized. Auto-run: plan -> run -> finish for TC v0.1 (tabular vertical slice, 3 modules, LLM synthetic seed, single ranker, full-loop e2e, 3-event success verdict)."
+}

@@ -1,0 +1,53 @@
+# 시크릿
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+credentials.json
+secrets/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg-info/
+.eggs/
+dist/
+build/
+.installed.cfg
+
+# uv / venv
+.venv/
+venv/
+env/
+
+# 테스트·커버리지
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+.mypy_cache/
+.ruff_cache/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# 로컬 dev
+docker-compose.override.yml
+*.log
+.cq/runtime/state/*.local.*
+
+# 데이터 (TC는 사용자 데이터 절대 보관 X — 안전망)
+data/
+*.csv
+*.parquet
