@@ -42,22 +42,19 @@ class GeminiEmbedding2Provider:
         return vectors[0]
 
     async def embed_batch(self, texts: list[str]) -> list[list[float]]:
-        """다수 text를 한 API 호출로 임베딩."""
-        # google-genai SDK는 동기 클라이언트만 노출하기도 한다.
-        # FastAPI 환경에서는 to_thread로 감싸야 하지만, 인터페이스는 async로 유지.
-        # 실제 호출 로직은 plan 단계에서 정밀화.
-        response = self._client.models.embed_content(
-            model=self._model,
-            contents=texts,
-        )
-        embeddings = [_as_vector(item) for item in response.embeddings]
-        token_estimate = sum(len(t) // 4 for t in texts)  # rough char-to-token 추정
-        meter.record(
-            model=self._model,
-            operation="embedding",
-            input_tokens=token_estimate,
-        )
-        return embeddings
+        """다수 text를 임베딩. Gemini embed_content는 단일 content 1회당 1 vector만
+        반환하므로 sequential N회 호출로 처리. 향후 asyncBatchEmbedContent 활용 가능.
+        """
+        vectors: list[list[float]] = []
+        for t in texts:
+            response = self._client.models.embed_content(model=self._model, contents=t)
+            vectors.append(_as_vector(response.embeddings[0]))
+            meter.record(
+                model=self._model,
+                operation="embedding",
+                input_tokens=max(1, len(t) // CHAR_PER_TOKEN_ESTIMATE),
+            )
+        return vectors
 
 
 class GeminiFlash25Reranker:

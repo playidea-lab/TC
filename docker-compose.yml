@@ -8,7 +8,7 @@ services:
       POSTGRES_USER: commons
       POSTGRES_PASSWORD: changeme
     ports:
-      - "5432:5432"
+      - "5433:5432"
     volumes:
       - the_commons_pg_data:/var/lib/postgresql/data
     healthcheck:

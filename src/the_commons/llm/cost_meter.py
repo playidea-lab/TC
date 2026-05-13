@@ -12,7 +12,7 @@ from threading import Lock
 # Gemini 가격 (USD per 1M tokens, 2026-05 기준)
 PRICING_USD_PER_M_TOKEN: dict[str, dict[str, float]] = {
     "gemini-embedding-2": {"input": 0.10, "output": 0.0},
-    "gemini-flash-2.5": {"input": 0.30, "output": 2.50},
+    "gemini-2.5-flash": {"input": 0.30, "output": 2.50},
     # 추가 모델은 여기에 등록
 }
 

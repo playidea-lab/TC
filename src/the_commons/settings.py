@@ -25,7 +25,7 @@ class Settings(BaseSettings):
     # Gemini
     google_api_key: str = Field(default="", description="Google Generative AI API key")
     gemini_embedding_model: str = Field(default="gemini-embedding-2")
-    gemini_reranker_model: str = Field(default="gemini-flash-2.5")
+    gemini_reranker_model: str = Field(default="gemini-2.5-flash")
 
     # CQ JWT
     cq_jwt_public_key_path: str = Field(default="", description="CQ가 발행한 JWT 검증용 공개키")

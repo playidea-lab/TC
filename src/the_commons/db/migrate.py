@@ -21,13 +21,15 @@ MIGRATIONS_DIR = Path(__file__).parent / "migrations"
 
 async def _applied_filenames(conn: psycopg.AsyncConnection) -> set[str]:
     """이미 적용된 마이그레이션 파일명 집합. 테이블 없으면 빈 set."""
-    async with conn.cursor() as cur:
-        try:
+    try:
+        async with conn.cursor() as cur:
             await cur.execute("SELECT filename FROM schema_migration")
             rows = await cur.fetchall()
             return {row[0] for row in rows}
-        except psycopg.errors.UndefinedTable:
-            return set()
+    except psycopg.errors.UndefinedTable:
+        # 트랜잭션 abort 상태 회복 — autocommit이라면 영향 없음
+        await conn.rollback()
+        return set()
 
 
 async def apply_migrations() -> list[str]:
@@ -38,7 +40,11 @@ async def apply_migrations() -> list[str]:
         return []
 
     applied: list[str] = []
-    async with await psycopg.AsyncConnection.connect(settings.database_url) as conn:
+    # DDL은 autocommit이 안전 — CREATE EXTENSION / TYPE / TABLE 등을 단일
+    # statement-per-execute로 처리.
+    async with await psycopg.AsyncConnection.connect(
+        settings.database_url, autocommit=True
+    ) as conn:
         already = await _applied_filenames(conn)
 
         for sql_file in sql_files:
@@ -58,7 +64,6 @@ async def apply_migrations() -> list[str]:
                         "ON CONFLICT (filename) DO NOTHING",
                         (sql_file.name,),
                     )
-            await conn.commit()
             applied.append(sql_file.name)
             logger.info("  ✓ %s", sql_file.name)
 
