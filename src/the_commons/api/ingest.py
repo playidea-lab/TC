@@ -1,5 +1,6 @@
 """POST /ingest — pcq 2.x evidence를 받아 검증·정화·저장 + embedding + reciprocity."""
 
+import contextlib
 import logging
 
 from fastapi import APIRouter, Depends, HTTPException, status
@@ -101,10 +102,8 @@ async def ingest_evidence(
         )
         conn = getattr(store, "_conn", None)
         if conn is not None:
-            try:
+            with contextlib.suppress(Exception):
                 await conn.rollback()
-            except Exception:  # noqa: BLE001
-                pass
 
     # 5. cluster bucket 계산
     cluster_bucket = compute_problem_cluster_bucket(cleaned)
