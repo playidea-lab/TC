@@ -515,17 +515,138 @@ built it.
 
 ## Current Status
 
-This repository contains a vision document only.
-
 | Component | State |
 |---|---|
-| Format (`pcq`) | Released — `uv add pcq` |
+| Format (`pcq`) | Released — `uv add pcq` (1.x); pcq 2.x contract draft in [`docs/pcq-2.x.md`](docs/pcq-2.x.md) |
 | Press (`cq`) | Operating — PI Lab managed |
-| **Library (`The Commons`)** | **Vision stage — this README is the only artifact** |
+| **Library (`The Commons`)** | **v0.1 in development — backend scaffolding complete, 184 tests passing** |
 
-No code yet. No public surface yet. No ingestion endpoint yet. This is the
-moment to write down what we are building so that the first lines of code
-serve the vision and not the other way around.
+What exists now (private repo, alpha):
+
+- Python 3.12 + FastAPI service with `/health`, `/ingest`, `/evidence/{id}`, `/recommend`
+- PostgreSQL 16 + pgvector schema (7 tables, HNSW vector index)
+- Hybrid retrieve-and-rerank match-maker wired to Gemini Embedding 2 + Gemini 2.5 Flash
+- Synthetic-tier evidence + auto-retirement worker + reciprocity event store
+- K1→K2 narrative end-to-end test produces a `success` 3-event verdict
+- Live integration tests pass against real PostgreSQL and real Gemini API
+
+What is **not** yet live: public ingestion endpoint, hosted deployment, the
+contributor license, an external onboarding flow. Those are M4 (CQ integration)
+and launch tasks.
+
+---
+
+## Development (v0.1)
+
+### Stack
+
+- **Python 3.12+** with `uv` (no `pip install`)
+- **FastAPI** + Pydantic 2
+- **PostgreSQL 16** with `pgvector` extension
+- **psycopg 3** async + raw SQL
+- **Gemini Embedding 2** (text/multimodal-ready) + **Gemini 2.5 Flash** (listwise rerank)
+- **PyJWT** for CQ-issued JWT verify
+- **pytest** + **ruff**
+
+### Quick start
+
+```bash
+# 1. clone + install
+git clone https://git.pilab.co.kr/pi/tc.git && cd tc
+uv sync
+
+# 2. env (.env)
+cp .env.example .env
+# GOOGLE_API_KEY=...   # for /recommend; integration tests skip without it
+
+# 3. PostgreSQL with pgvector
+docker compose up -d
+uv run python -m the_commons.db.migrate
+
+# 4. unit suite (no external deps)
+uv run pytest tests/unit -q
+
+# 5. integration suite (needs DB + optionally Gemini key)
+uv run pytest tests/integration -q
+
+# 6. dev server
+uv run uvicorn the_commons.main:app --reload
+# → http://127.0.0.1:8000/docs (OpenAPI)
+```
+
+### Project structure
+
+```
+src/the_commons/
+├── api/            HTTP handlers (health / ingest / evidence / recommend)
+├── auth/           CQ-issued JWT verify
+├── db/             psycopg async pool + SQL migrations
+├── library/        L1 immutable evidence store, content hash, L3 visibility
+├── ingestion/      PHI blocker, attribution validator, cluster impact
+├── matchmaker/     serializer (template v1) + retriever + reranker + composer
+├── reciprocity/    loop_closure / promote / contradicts event store + verdict report
+├── retirement/     cluster density worker, deprecate policy
+├── llm/            EmbeddingProvider + LLMReranker protocols, Gemini impls, cost meter
+└── seed/           synthetic_generator (LLM-distilled) + recipe_catalog
+```
+
+### API surface (v0.1, internal only)
+
+All endpoints require a CQ-issued Bearer JWT (`Authorization: Bearer <jwt>`).
+
+```
+GET  /health                  liveness + version
+POST /ingest                  pcq 2.x evidence → store + cluster impact
+GET  /evidence/{evidence_id}  L1 immutable record (synthetic or real)
+POST /recommend               query → top-N candidates + corpus_context
+```
+
+`/ingest` runs the full pipeline: PHI block → attribution validate → schema
+parse → store insert → promote/contradicts event recording → retirement
+sweep when `real_count ≥ RETIREMENT_REAL_THRESHOLD`.
+
+`/recommend` runs serialize → embed → pgvector retrieve top-K → LLM listwise
+rerank → compose, and records one `loop_closure` event per cited evidence_id.
+
+### Testing strategy
+
+- **`tests/unit/`** — no external dependencies; in-memory protocol impls
+  cover every module. 171 cases.
+- **`tests/integration/test_postgres_store_real.py`** — round-trips against
+  the actual PostgreSQL + pgvector schema. 9 cases.
+- **`tests/integration/test_pgvector_retriever_real.py`** — real HNSW
+  cosine search on 1024-dim vectors. 3 cases.
+- **`tests/integration/test_gemini_real.py`** — real Gemini API calls
+  (auto-skipped when `GOOGLE_API_KEY` is empty). 4 cases, ~10s.
+- **`tests/unit/test_k1_k2_narrative.py`** — the full vision loop in a
+  single test: synthetic seed → K1 ingest produces promote event → K2
+  recommend cites K1 → `build_verdict_report` returns `branch=success`,
+  `strengthened=True`.
+
+### Configuration
+
+All knobs live in `.env` and are read through `Settings` (Pydantic):
+
+```bash
+DATABASE_URL=postgresql://commons:changeme@localhost:5433/commons
+GOOGLE_API_KEY=...
+GEMINI_EMBEDDING_MODEL=gemini-embedding-2
+GEMINI_RERANKER_MODEL=gemini-2.5-flash
+CQ_JWT_ISSUER=cq.pilab.kr
+CQ_JWT_AUDIENCE=the-commons
+RETIREMENT_REAL_THRESHOLD=3       # real evidence count that triggers synthetic retirement
+RETRIEVE_TOP_K=20                  # Stage 1 vector retrieve top-K
+RECOMMEND_TOP_N=5                  # Stage 2 rerank top-N
+TEMPLATE_VERSION=v1                # serializer template version
+```
+
+### Vendor abstraction
+
+`EmbeddingProvider`, `LLMReranker`, `VectorIndex`, `EvidenceStore`,
+`ReciprocityEventStore`, `RetirementBackend` are all `Protocol`s with
+in-memory and Postgres/Gemini implementations. Swapping Gemini for
+DeepSeek-V4, Voyage, or a locally-served Qwen happens at the protocol
+layer — no match-maker code changes.
 
 ---
 
