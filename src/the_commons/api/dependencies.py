@@ -20,11 +20,17 @@ _inmemory_reciprocity = InMemoryReciprocityEventStore()
 
 
 async def get_evidence_store() -> AsyncIterator[EvidenceStore]:
-    """production용 — PostgresEvidenceStore (active connection 자동 lifetime)."""
+    """production용 — PostgresEvidenceStore (active connection 자동 lifetime).
+
+    endpoint가 직접 던진 HTTPException은 그대로 통과시키고, 그 외 connection
+    실패 등만 503으로 감싼다.
+    """
     try:
         async with get_connection() as conn:
             yield PostgresEvidenceStore(conn)
-    except Exception as exc:  # noqa: BLE001 — production fallback
+    except HTTPException:
+        raise
+    except Exception as exc:  # noqa: BLE001 — connection-level fallback
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail=f"DB 연결 실패: {exc}",
