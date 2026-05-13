@@ -41,6 +41,12 @@ class EvidenceStore(Protocol):
         """ID로 단건 조회. 없으면 None."""
         ...
 
+    async def update_embedding(
+        self, evidence_id: str, embedding: list[float]
+    ) -> None:
+        """vector embedding 저장. ingest 직후 또는 re-embed batch에서 호출."""
+        ...
+
     async def list_active_synthetics_in_bucket(
         self,
         *,
@@ -96,6 +102,13 @@ class InMemoryEvidenceStore:
 
     async def get_by_id(self, evidence_id: str) -> Evidence | None:
         return self._by_id.get(evidence_id)
+
+    async def update_embedding(
+        self, evidence_id: str, embedding: list[float]
+    ) -> None:
+        # InMemory는 별도 VectorIndex를 사용 (matchmaker.retriever.InMemoryVectorIndex).
+        # 여기선 silent no-op — 통합 test에서 두 store를 함께 시드.
+        _ = (evidence_id, embedding)
 
     async def list_active_synthetics_in_bucket(
         self,
@@ -185,6 +198,10 @@ SET deprecated = TRUE, deprecated_reason = %s, deprecated_at = NOW()
 WHERE evidence_id = %s AND deprecated = FALSE
 """
 
+_UPDATE_EMBEDDING_SQL = """
+UPDATE evidence SET embedding = %s::vector WHERE evidence_id = %s
+"""
+
 
 class PostgresEvidenceStore:
     """psycopg 3 async 기반 PostgreSQL 구현체."""
@@ -242,6 +259,16 @@ class PostgresEvidenceStore:
     async def mark_deprecated(self, evidence_id: str, *, reason: str) -> None:
         async with self._conn.cursor() as cur:
             await cur.execute(_MARK_DEPRECATED_SQL, (reason, evidence_id))
+        await self._conn.commit()
+
+    async def update_embedding(
+        self, evidence_id: str, embedding: list[float]
+    ) -> None:
+        # list → pgvector literal 직접 변환 (psycopg list adapter 우회).
+        # pgvector가 '[1.0,2.0,...]' 텍스트를 vector로 캐스팅.
+        literal = "[" + ",".join(repr(float(v)) for v in embedding) + "]"
+        async with self._conn.cursor() as cur:
+            await cur.execute(_UPDATE_EMBEDDING_SQL, (literal, evidence_id))
         await self._conn.commit()
 
 

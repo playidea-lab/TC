@@ -12,6 +12,7 @@ import logging
 from typing import Any
 
 from google import genai
+from google.genai import types as genai_types
 
 from the_commons.llm.cost_meter import meter
 from the_commons.llm.protocol import RankedCandidate
@@ -29,12 +30,22 @@ def _make_client() -> genai.Client:
     return genai.Client(api_key=settings.google_api_key)
 
 
-class GeminiEmbedding2Provider:
-    """Gemini Embedding 2 기반 EmbeddingProvider 구현체."""
+EMBEDDING_DIMENSION = 1024  # pgvector HNSW(<= 2000)에 맞는 Matryoshka 축소 차원
 
-    def __init__(self, model: str | None = None) -> None:
+
+class GeminiEmbedding2Provider:
+    """Gemini Embedding 2 기반 EmbeddingProvider 구현체.
+
+    native 차원은 3072이지만 pgvector HNSW의 2000-dim 제한과 storage 비용을
+    고려해 output_dimensionality=1024로 Matryoshka 축소된 벡터를 사용.
+    """
+
+    def __init__(
+        self, model: str | None = None, *, output_dim: int = EMBEDDING_DIMENSION
+    ) -> None:
         self._model = model or settings.gemini_embedding_model
         self._client = _make_client()
+        self._output_dim = output_dim
 
     async def embed(self, text: str) -> list[float]:
         """단일 text → 임베딩 벡터."""
@@ -43,11 +54,14 @@ class GeminiEmbedding2Provider:
 
     async def embed_batch(self, texts: list[str]) -> list[list[float]]:
         """다수 text를 임베딩. Gemini embed_content는 단일 content 1회당 1 vector만
-        반환하므로 sequential N회 호출로 처리. 향후 asyncBatchEmbedContent 활용 가능.
+        반환하므로 sequential N회 호출로 처리.
         """
+        config = genai_types.EmbedContentConfig(output_dimensionality=self._output_dim)
         vectors: list[list[float]] = []
         for t in texts:
-            response = self._client.models.embed_content(model=self._model, contents=t)
+            response = self._client.models.embed_content(
+                model=self._model, contents=t, config=config
+            )
             vectors.append(_as_vector(response.embeddings[0]))
             meter.record(
                 model=self._model,

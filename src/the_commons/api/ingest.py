@@ -1,8 +1,11 @@
-"""POST /ingest — pcq 2.x evidence를 받아 검증·정화·저장 + reciprocity event 발동."""
+"""POST /ingest — pcq 2.x evidence를 받아 검증·정화·저장 + embedding + reciprocity."""
+
+import logging
 
 from fastapi import APIRouter, Depends, HTTPException, status
 
 from the_commons.api.dependencies import (
+    get_embedder,
     get_evidence_store,
     get_reciprocity_store,
 )
@@ -17,9 +20,13 @@ from the_commons.ingestion.cluster_impact import compute_problem_cluster_bucket
 from the_commons.ingestion.phi_blocker import PHIViolationError, block_phi
 from the_commons.library.models import Evidence
 from the_commons.library.store import EvidenceAlreadyExistsError, EvidenceStore
+from the_commons.llm.protocol import EmbeddingProvider
+from the_commons.matchmaker.serializer import default_registry
 from the_commons.reciprocity.event_store import ReciprocityEventStore
 from the_commons.reciprocity.promote_contradict import evaluate_and_record
 from the_commons.settings import settings
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(tags=["ingest"])
 
@@ -34,6 +41,7 @@ async def ingest_evidence(
     claims: VerifiedClaims = Depends(require_contributor),
     store: EvidenceStore = Depends(get_evidence_store),
     reciprocity: ReciprocityEventStore = Depends(get_reciprocity_store),
+    embedder: EmbeddingProvider = Depends(get_embedder),
 ) -> IngestResponse:
     """ingestion 파이프라인:
     PHI 차단 → attribution → schema → store → promote/contradicts → retirement check.
@@ -75,6 +83,28 @@ async def ingest_evidence(
             status_code=status.HTTP_409_CONFLICT,
             detail=str(exc),
         ) from exc
+
+    # 4.5. embedding 생성 + 저장 (실패는 graceful — record는 살아있음).
+    # 실패 시 connection이 aborted 상태일 수 있으므로 rollback으로 정리.
+    try:
+        registry = default_registry()
+        description = registry.serialize_evidence(
+            evidence, version=settings.template_version
+        )
+        vector = await embedder.embed(description)
+        await store.update_embedding(evidence.evidence_id, vector)
+    except Exception as exc:  # noqa: BLE001 — 외부 LLM 실패는 retrieve 영향만
+        logger.warning(
+            "embedding 실패 evidence_id=%s: %s — record는 저장됨, retrieve 불가",
+            evidence.evidence_id,
+            exc,
+        )
+        conn = getattr(store, "_conn", None)
+        if conn is not None:
+            try:
+                await conn.rollback()
+            except Exception:  # noqa: BLE001
+                pass
 
     # 5. cluster bucket 계산
     cluster_bucket = compute_problem_cluster_bucket(cleaned)

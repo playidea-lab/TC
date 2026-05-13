@@ -9,6 +9,8 @@ from fastapi import Depends, HTTPException, status
 
 from the_commons.db.session import get_connection
 from the_commons.library.store import EvidenceStore, PostgresEvidenceStore
+from the_commons.llm.gemini import GeminiEmbedding2Provider
+from the_commons.llm.protocol import EmbeddingProvider
 from the_commons.reciprocity.event_store import (
     InMemoryReciprocityEventStore,
     PostgresReciprocityEventStore,
@@ -46,6 +48,11 @@ async def get_reciprocity_store(
     if conn is not None:
         return PostgresReciprocityEventStore(conn)
     return _inmemory_reciprocity
+
+
+async def get_embedder() -> EmbeddingProvider:
+    """production embedder. test는 dependency_overrides로 교체."""
+    return GeminiEmbedding2Provider()
 
 
 # 단위 테스트가 이 typing alias를 import해서 override 가능
