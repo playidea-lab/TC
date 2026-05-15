@@ -15,6 +15,7 @@ from the_commons import __version__
 from the_commons.api.evidence import router as evidence_router
 from the_commons.api.health import router as health_router
 from the_commons.api.ingest import router as ingest_router
+from the_commons.api.metrics import router as metrics_router
 from the_commons.api.recommend import router as recommend_router
 from the_commons.api.verdict import router as verdict_router
 from the_commons.db.session import close_pool
@@ -73,3 +74,4 @@ app.include_router(ingest_router)
 app.include_router(evidence_router)
 app.include_router(recommend_router)
 app.include_router(verdict_router)
+app.include_router(metrics_router)
