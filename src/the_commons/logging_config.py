@@ -92,6 +92,26 @@ class RequestIDMiddleware(BaseHTTPMiddleware):
         return response
 
 
+class SecurityHeadersMiddleware(BaseHTTPMiddleware):
+    """OWASP-aligned baseline 보안 헤더를 응답에 첨가 (E.7).
+
+    TC는 JSON-only internal API라 HTML-specific 헤더(CSP) 일부는 무의미하지만,
+    nosniff / DENY / no-referrer는 *모든 응답*에 안전한 default.
+    HSTS는 HTTPS 환경에서 의미 — Ingress가 처리하거나 production env에서만.
+    """
+
+    async def dispatch(
+        self,
+        request: Request,
+        call_next: Callable[[Request], Awaitable[Response]],
+    ) -> Response:
+        response = await call_next(request)
+        response.headers.setdefault("X-Content-Type-Options", "nosniff")
+        response.headers.setdefault("X-Frame-Options", "DENY")
+        response.headers.setdefault("Referrer-Policy", "no-referrer")
+        return response
+
+
 class BodySizeLimitMiddleware(BaseHTTPMiddleware):
     """Content-Length가 settings.max_request_body_bytes 초과면 413 즉시 반환.
 

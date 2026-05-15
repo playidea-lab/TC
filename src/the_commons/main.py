@@ -22,6 +22,7 @@ from the_commons.db.session import close_pool
 from the_commons.logging_config import (
     BodySizeLimitMiddleware,
     RequestIDMiddleware,
+    SecurityHeadersMiddleware,
     configure_logging,
 )
 from the_commons.settings import settings as _settings
@@ -72,7 +73,12 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# 미들웨어는 LIFO 적용 — BodySizeLimit이 *먼저* 평가되도록 RequestID 다음에 add.
+# 미들웨어는 LIFO — 가장 마지막 add가 *가장 먼저* 평가.
+# 순서 (먼저 평가 → 마지막 평가):
+#   1) BodySizeLimit  : 큰 요청 즉시 차단 (JWT·logging 자원 절약)
+#   2) RequestID      : 통과한 요청에 trace_id 부여
+#   3) SecurityHeaders: 응답에 보안 헤더 첨가 (가장 안쪽)
+app.add_middleware(SecurityHeadersMiddleware)
 app.add_middleware(RequestIDMiddleware)
 app.add_middleware(BodySizeLimitMiddleware, max_bytes=_settings.max_request_body_bytes)
 
