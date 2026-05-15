@@ -7,12 +7,17 @@ ingestion 시점에 record가:
 - evidence_id가 일정 패턴
 """
 
+import re
 from typing import Any
 
 from the_commons.library.content_hash import compute_content_hash
 
 SUPPORTED_PCQ_MAJOR = 2
 EVIDENCE_ID_PREFIX = "ev-"
+# E.1 — /evidence/{id} GET path pattern과 일치. 둘이 같은 spec.
+EVIDENCE_ID_PATTERN = re.compile(r"^ev-[A-Za-z0-9_-]+$")
+EVIDENCE_ID_MIN_LENGTH = 4
+EVIDENCE_ID_MAX_LENGTH = 128
 
 
 class AttributionError(ValueError):
@@ -32,9 +37,17 @@ def validate_attribution(record: dict[str, Any]) -> None:
 
 def _require_evidence_id(record: dict[str, Any]) -> None:
     eid = record.get("evidence_id")
-    if not isinstance(eid, str) or not eid.startswith(EVIDENCE_ID_PREFIX):
+    if not isinstance(eid, str):
+        raise AttributionError(f"evidence_id 필요 (받은 타입: {type(eid).__name__})")
+    if not (EVIDENCE_ID_MIN_LENGTH <= len(eid) <= EVIDENCE_ID_MAX_LENGTH):
         raise AttributionError(
-            f"evidence_id 필요, '{EVIDENCE_ID_PREFIX}' 접두어 필수 (받은 값: {eid!r})"
+            f"evidence_id 길이 {EVIDENCE_ID_MIN_LENGTH}-{EVIDENCE_ID_MAX_LENGTH} "
+            f"범위여야 (받은 값 길이: {len(eid)})"
+        )
+    if not EVIDENCE_ID_PATTERN.match(eid):
+        raise AttributionError(
+            f"evidence_id 형식 위반 — 'ev-' 접두어 + 영숫자/하이픈/언더스코어만 "
+            f"(받은 값: {eid!r})"
         )
 
 

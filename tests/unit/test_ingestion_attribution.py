@@ -48,6 +48,34 @@ def test_validate_rejects_missing_evidence_id() -> None:
         validate_attribution(rec)
 
 
+@pytest.mark.parametrize(
+    "bad_id",
+    [
+        "ev-with/slash",
+        "ev-with space",
+        "ev-with.dot",
+        "ev-한글",
+        "ev-",  # 너무 짧음 (length 3)
+    ],
+)
+def test_validate_rejects_invalid_evidence_id_pattern(bad_id: str) -> None:
+    """E.1 — ingest evidence_id가 /evidence/{id} GET pattern과 같은 제약."""
+    rec = _record()
+    rec["evidence_id"] = bad_id
+    rec["attribution"]["content_hash"] = compute_content_hash(rec)
+    with pytest.raises(AttributionError, match="evidence_id"):
+        validate_attribution(rec)
+
+
+def test_validate_rejects_overlong_evidence_id() -> None:
+    """evidence_id 길이 max 초과 거부."""
+    rec = _record()
+    rec["evidence_id"] = "ev-" + "a" * 200
+    rec["attribution"]["content_hash"] = compute_content_hash(rec)
+    with pytest.raises(AttributionError, match="evidence_id"):
+        validate_attribution(rec)
+
+
 def test_validate_rejects_synthetic_without_source() -> None:
     """tier=synthetic인데 synthetic_source 없으면 거부."""
     rec = _record(tier="synthetic", synthetic_source=None)
