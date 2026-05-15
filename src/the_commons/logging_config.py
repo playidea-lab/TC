@@ -6,6 +6,7 @@ X-Request-ID로 echo되므로 사용자가 incident report 시 trace 가능.
 
 from __future__ import annotations
 
+import json
 import logging
 import uuid
 from collections.abc import Awaitable, Callable
@@ -13,6 +14,7 @@ from collections.abc import Awaitable, Callable
 import structlog
 from fastapi import Request, Response
 from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.responses import JSONResponse
 
 from the_commons.settings import settings
 
@@ -88,3 +90,40 @@ class RequestIDMiddleware(BaseHTTPMiddleware):
 
         response.headers[REQUEST_ID_HEADER] = request_id
         return response
+
+
+class BodySizeLimitMiddleware(BaseHTTPMiddleware):
+    """Content-Length가 settings.max_request_body_bytes 초과면 413 즉시 반환.
+
+    H.11 — DoS 또는 malformed body 방어. JWT 검증 등 비싼 처리 전에 잘라낸다.
+    """
+
+    def __init__(self, app, *, max_bytes: int) -> None:
+        super().__init__(app)
+        self._max_bytes = max_bytes
+
+    async def dispatch(
+        self,
+        request: Request,
+        call_next: Callable[[Request], Awaitable[Response]],
+    ) -> Response:
+        cl_header = request.headers.get("content-length")
+        if cl_header is not None:
+            try:
+                cl = int(cl_header)
+            except ValueError:
+                cl = None
+            if cl is not None and cl > self._max_bytes:
+                payload = {
+                    "detail": (
+                        f"request body too large: {cl} bytes > {self._max_bytes}"
+                    )
+                }
+                return JSONResponse(
+                    status_code=413,
+                    content=payload,
+                )
+        return await call_next(request)
+
+
+_ = json  # 미사용 import 방지 (향후 사용 가능성 — 명시 의도)

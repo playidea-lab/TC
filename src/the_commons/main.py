@@ -19,7 +19,12 @@ from the_commons.api.metrics import router as metrics_router
 from the_commons.api.recommend import router as recommend_router
 from the_commons.api.verdict import router as verdict_router
 from the_commons.db.session import close_pool
-from the_commons.logging_config import RequestIDMiddleware, configure_logging
+from the_commons.logging_config import (
+    BodySizeLimitMiddleware,
+    RequestIDMiddleware,
+    configure_logging,
+)
+from the_commons.settings import settings as _settings
 
 # structured logging + request_id 활성화 (settings.log_format 기준)
 configure_logging()
@@ -67,7 +72,9 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+# 미들웨어는 LIFO 적용 — BodySizeLimit이 *먼저* 평가되도록 RequestID 다음에 add.
 app.add_middleware(RequestIDMiddleware)
+app.add_middleware(BodySizeLimitMiddleware, max_bytes=_settings.max_request_body_bytes)
 
 app.include_router(health_router)
 app.include_router(ingest_router)

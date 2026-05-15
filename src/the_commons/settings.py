@@ -71,5 +71,17 @@ class Settings(BaseSettings):
         ),
     )
 
+    # HTTP request body size limit (DoS·malformed body 방어).
+    # pcq evidence record는 보통 5~10KB, fingerprint·metrics 풍부해도 ~100KB.
+    # 1MB는 큰 안전망.
+    max_request_body_bytes: int = Field(
+        default=1_048_576,  # 1 MB
+        ge=1024,
+        description=(
+            "Content-Length가 이 한도 초과 시 413. "
+            "DoS·malformed body 방어용. 단위: bytes."
+        ),
+    )
+
 
 settings = Settings()
