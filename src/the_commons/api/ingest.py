@@ -67,6 +67,11 @@ async def ingest_evidence(
             detail=f"attribution 검증 실패: {exc}",
         ) from exc
 
+    # 2.5. verifier silent strip — synthetic_source.verifier는 server-derived.
+    #     contributor가 보낸 값은 무시. content_hash 계산엔 어차피 제외.
+    if isinstance(cleaned.get("synthetic_source"), dict):
+        cleaned["synthetic_source"]["verifier"] = None
+
     # 3. schema
     try:
         evidence = Evidence.model_validate(cleaned)

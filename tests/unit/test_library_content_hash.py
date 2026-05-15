@@ -95,3 +95,26 @@ def test_verify_without_content_hash_returns_false() -> None:
     record = _sample_record()
     record["attribution"].pop("content_hash", None)
     assert verify_content_hash(record) is False
+
+
+def test_compute_hash_ignores_synthetic_source_verifier() -> None:
+    """synthetic_source.verifier는 server-derived → hash 계산에서 제외 (L1 immutable 정합)."""
+    a = _sample_record()
+    a["tier"] = "synthetic"
+    a["synthetic_source"] = {
+        "source_model": "gemini-flash-2.5",
+        "prompt_hash": "sha256:x",
+        "generated_at": "2026-05-13T06:00:00Z",
+        "verifier": None,
+    }
+
+    b = _sample_record()
+    b["tier"] = "synthetic"
+    b["synthetic_source"] = {
+        "source_model": "gemini-flash-2.5",
+        "prompt_hash": "sha256:x",
+        "generated_at": "2026-05-13T06:00:00Z",
+        "verifier": "ev-real-xyz",  # server가 사후 채워도 hash 동일해야
+    }
+
+    assert compute_content_hash(a) == compute_content_hash(b)

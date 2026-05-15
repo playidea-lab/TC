@@ -132,12 +132,17 @@ SHA256 — evidence immutability 검증.
   "source_model": "gemini-1.5-flash" | "claude-sonnet" | "codex-...",
   "prompt_hash": "sha256:...",          // 재현용
   "generated_at": "2026-05-13T07:00:00Z",
-  "verifier": "ev-real-xyz" | null      // promote/contradicts 사용자 재현으로 채워짐
+  "verifier": "ev-real-xyz" | null      // ⚠ server-derived (아래)
 }
 ```
 
-- `verifier` 채워지면 해당 real evidence가 synthetic prediction을 검증한 결과.
-- 일치하면 *promote*, 불일치하면 *contradicts*. 둘 다 valid event.
+- `verifier`는 **server-derived, read-only**. contributor가 ingest payload에 채워
+  보내도 무시(silent strip). content_hash 계산에서도 제외되므로 검증에 영향 없음.
+- SSOT는 `reciprocity_event` 테이블의 `promote`/`contradicts` 이벤트. `GET
+  /evidence/{synthetic_id}` 응답 시 server가 event store에서 read-time JOIN해 채움.
+- 이 정합이 **L1 immutable** 약속(`run_record` 변경 불가)을 보존한다.
+- 채워졌을 때: 해당 real evidence가 synthetic prediction을 검증한 결과.
+  일치하면 *promote*, 불일치하면 *contradicts*. 둘 다 valid event.
 
 ## TC ingestion의 적용 흐름
 

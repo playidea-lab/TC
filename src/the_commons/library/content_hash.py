@@ -42,12 +42,22 @@ def verify_content_hash(record: dict[str, Any]) -> bool:
 
 
 def _strip_content_hash(record: dict[str, Any]) -> dict[str, Any]:
-    """attribution.content_hash만 제외한 shallow-clone."""
-    if "attribution" not in record:
-        return record
+    """hash 계산 입력에서 *server-set* 필드를 제외한 shallow-clone.
 
+    제외 대상:
+    - attribution.content_hash (chicken-and-egg, 기존)
+    - synthetic_source.verifier (server-derived, L1 immutable 정합)
+    """
     cloned = dict(record)
-    attribution = dict(cloned["attribution"])
-    attribution.pop("content_hash", None)
-    cloned["attribution"] = attribution
+
+    if "attribution" in cloned:
+        attribution = dict(cloned["attribution"])
+        attribution.pop("content_hash", None)
+        cloned["attribution"] = attribution
+
+    if isinstance(cloned.get("synthetic_source"), dict):
+        synthetic = dict(cloned["synthetic_source"])
+        synthetic.pop("verifier", None)
+        cloned["synthetic_source"] = synthetic
+
     return cloned

@@ -50,6 +50,14 @@ class ReciprocityEventStore(Protocol):
         """origin별 누적 카운트 (internal vs external)."""
         ...
 
+    async def find_verifier_for(self, synthetic_evidence_id: str) -> str | None:
+        """synthetic을 검증(promote 또는 contradicts)한 real evidence_id 반환.
+
+        L1 immutable 정합을 위해 evidence.synthetic_source.verifier는 server-derived.
+        GET /evidence/{id} 응답 시 이 함수로 read-time JOIN.
+        """
+        ...
+
 
 # ----------------------------------------------------------------------------
 # In-memory
@@ -97,6 +105,15 @@ class InMemoryReciprocityEventStore:
             out[e.origin] = out.get(e.origin, 0) + 1
         return out
 
+    async def find_verifier_for(self, synthetic_evidence_id: str) -> str | None:
+        """synthetic을 검증한 real evidence_id. promote/contradicts 둘 다 검증."""
+        for event in self.events:
+            if event.event_type not in ("promote", "contradicts"):
+                continue
+            if synthetic_evidence_id in event.related_evidence_ids:
+                return event.primary_evidence_id
+        return None
+
 
 # ----------------------------------------------------------------------------
 # PostgreSQL
@@ -118,6 +135,14 @@ _COUNT_BY_TYPE_SQL = (
 _COUNT_BY_ORIGIN_SQL = (
     "SELECT origin::text, COUNT(*) FROM reciprocity_event GROUP BY origin"
 )
+
+_FIND_VERIFIER_SQL = """
+SELECT primary_evidence_id FROM reciprocity_event
+WHERE event_type IN ('promote', 'contradicts')
+  AND related_evidence_ids @> %s::jsonb
+ORDER BY created_at ASC
+LIMIT 1
+"""
 
 
 class PostgresReciprocityEventStore:
@@ -175,3 +200,12 @@ class PostgresReciprocityEventStore:
             await cur.execute(_COUNT_BY_ORIGIN_SQL)
             rows = await cur.fetchall()
         return {origin: int(count) for origin, count in rows}
+
+    async def find_verifier_for(self, synthetic_evidence_id: str) -> str | None:
+        async with self._conn.cursor() as cur:
+            await cur.execute(
+                _FIND_VERIFIER_SQL,
+                (json.dumps([synthetic_evidence_id]),),
+            )
+            row = await cur.fetchone()
+        return row[0] if row else None
