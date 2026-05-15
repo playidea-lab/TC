@@ -45,10 +45,11 @@ async def clean_db_conn() -> AsyncIterator[psycopg.AsyncConnection]:
     conn = await psycopg.AsyncConnection.connect(settings.database_url, autocommit=True)
     try:
         async with conn.cursor() as cur:
-            # 의존성 순서대로 truncate (FK cascade)
+            # 004 migration에서 cluster / evidence_cluster drop됨.
+            # retirement_audit.cluster_id는 TEXT bucket label로 변경.
             await cur.execute(
-                "TRUNCATE evidence, cluster, evidence_cluster, retirement_audit, "
-                "reciprocity_event, recipe, heuristic_rule RESTART IDENTITY CASCADE"
+                "TRUNCATE evidence, retirement_audit, reciprocity_event, "
+                "recipe, heuristic_rule RESTART IDENTITY CASCADE"
             )
         yield conn
     finally:
