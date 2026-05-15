@@ -6,7 +6,7 @@ v0.1엔 in-memory tracking, v0.2엔 DB로 영구화 검토.
 
 from collections import defaultdict
 from dataclasses import dataclass, field
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 from threading import Lock
 
 # Gemini 가격 (USD per 1M tokens, 2026-05 기준)
@@ -54,14 +54,17 @@ def estimate_cost_usd(model: str, input_tokens: int, output_tokens: int) -> floa
 
 
 class CostMeter:
-    """thread-safe 누적 cost tracker.
+    """thread-safe 누적 cost tracker + daily budget ceiling.
 
     모든 LLM provider 구현체가 호출 후 record()를 통해 사용량을 보고한다.
+    daily budget 도달 시 is_over_budget()가 True — endpoint가 호출 차단.
     """
 
     def __init__(self) -> None:
         self._entries: list[CostEntry] = []
         self._lock = Lock()
+        self._today_total_usd: float = 0.0
+        self._today_date: date = datetime.now(UTC).date()
 
     def record(
         self,
@@ -70,19 +73,41 @@ class CostMeter:
         input_tokens: int,
         output_tokens: int = 0,
     ) -> CostEntry:
-        """호출 1건 기록. 누적 entry를 반환."""
+        """호출 1건 기록. 누적 entry를 반환. UTC date 변경 시 daily total reset."""
         cost = estimate_cost_usd(model, input_tokens, output_tokens)
+        now = datetime.now(UTC)
         entry = CostEntry(
             model=model,
             operation=operation,
             input_tokens=input_tokens,
             output_tokens=output_tokens,
             cost_usd=cost,
-            timestamp=datetime.now(UTC),
+            timestamp=now,
         )
         with self._lock:
             self._entries.append(entry)
+            today = now.date()
+            if today != self._today_date:
+                self._today_total_usd = 0.0
+                self._today_date = today
+            self._today_total_usd += cost
         return entry
+
+    def today_total_usd(self) -> float:
+        """오늘(UTC) 누적 비용. 자정 지나면 자동 reset."""
+        now = datetime.now(UTC).date()
+        with self._lock:
+            if now != self._today_date:
+                # rollover — 새 날짜의 첫 조회는 0
+                self._today_total_usd = 0.0
+                self._today_date = now
+            return self._today_total_usd
+
+    def is_over_budget(self, daily_budget_usd: float) -> bool:
+        """daily_budget_usd ≥ 오늘 누적이면 True. budget=0이면 ceiling 미적용."""
+        if daily_budget_usd <= 0:
+            return False
+        return self.today_total_usd() >= daily_budget_usd
 
     def summary(self) -> CostSummary:
         """누적 사용량을 모델·operation별로 집계."""
@@ -107,6 +132,8 @@ class CostMeter:
         """누적 데이터 초기화 — 테스트·새 측정 기간 시작 시 사용."""
         with self._lock:
             self._entries.clear()
+            self._today_total_usd = 0.0
+            self._today_date = datetime.now(UTC).date()
 
 
 # 모듈 전역 인스턴스. 모든 provider가 동일 meter를 공유.

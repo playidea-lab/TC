@@ -2,7 +2,7 @@
 
 from typing import Literal
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Path, Query, status
 from pydantic import BaseModel, Field
 
 from the_commons.api.dependencies import (
@@ -63,7 +63,12 @@ async def list_evidence(
 
 @router.get("/evidence/{evidence_id}", response_model=EvidenceReadResponse)
 async def read_evidence(
-    evidence_id: str,
+    evidence_id: str = Path(
+        min_length=4,
+        max_length=128,
+        pattern=r"^ev-[A-Za-z0-9_-]+$",
+        description="evidence_id — 'ev-' 접두어 + 영숫자/하이픈/언더스코어, 4~128자",
+    ),
     claims: VerifiedClaims = Depends(require_contributor),
     store: EvidenceStore = Depends(get_evidence_store),
     reciprocity: ReciprocityEventStore = Depends(get_reciprocity_store),

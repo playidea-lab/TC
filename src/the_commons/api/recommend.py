@@ -2,7 +2,7 @@
 
 from typing import Any
 
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel
 
 from the_commons.api.dependencies import (
@@ -18,6 +18,7 @@ from the_commons.auth.dependencies import require_contributor
 from the_commons.auth.jwt_verify import VerifiedClaims
 from the_commons.ingestion.cluster_impact import compute_problem_cluster_bucket
 from the_commons.library.store import EvidenceStore
+from the_commons.llm.cost_meter import meter
 from the_commons.llm.gemini import GeminiEmbedding2Provider, GeminiFlash25Reranker
 from the_commons.llm.protocol import EmbeddingProvider, LLMReranker
 from the_commons.matchmaker.composer import ComposedCandidate, CorpusContext
@@ -26,6 +27,7 @@ from the_commons.matchmaker.serializer import QueryFeatures
 from the_commons.matchmaker.service import MatchmakerService
 from the_commons.reciprocity.event_store import ReciprocityEventStore
 from the_commons.reciprocity.loop_closure import record_loop_closures
+from the_commons.settings import settings
 
 router = APIRouter(tags=["recommend"])
 
@@ -113,6 +115,14 @@ async def recommend(
     """
     # rate limit — /recommend가 가장 비싼 endpoint (Gemini 호출)
     check_and_consume(recommend_bucket, client_rate_key(request, claims))
+
+    # Gemini daily cost ceiling — 도달 시 503
+    if meter.is_over_budget(settings.gemini_daily_budget_usd):
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="daily LLM cost budget exceeded — try again after UTC midnight",
+            headers={"Retry-After": "3600"},
+        )
 
     result = await service.recommend(body.query)
 

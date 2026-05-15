@@ -26,6 +26,7 @@ from the_commons.ingestion.cluster_impact import compute_problem_cluster_bucket
 from the_commons.ingestion.phi_blocker import PHIViolationError, block_phi
 from the_commons.library.models import Evidence
 from the_commons.library.store import EvidenceAlreadyExistsError, EvidenceStore
+from the_commons.llm.cost_meter import meter
 from the_commons.llm.protocol import EmbeddingProvider
 from the_commons.matchmaker.serializer import default_registry
 from the_commons.reciprocity.event_store import ReciprocityEventStore
@@ -52,6 +53,14 @@ async def ingest_evidence(
 ) -> IngestResponse:
     # rate limit — contributor 또는 IP (X-Forwarded-For 옵션은 settings에서)
     check_and_consume(ingest_bucket, client_rate_key(request, claims))
+
+    # Gemini cost ceiling — daily budget 도달 시 503 (Gemini embedding 호출 차단)
+    if meter.is_over_budget(settings.gemini_daily_budget_usd):
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="daily LLM cost budget exceeded — try again after UTC midnight",
+            headers={"Retry-After": "3600"},
+        )
     """ingestion 파이프라인:
     PHI 차단 → attribution → schema → store → promote/contradicts → retirement check.
     """

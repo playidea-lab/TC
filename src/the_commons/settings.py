@@ -60,5 +60,16 @@ class Settings(BaseSettings):
         ),
     )
 
+    # Gemini cost ceiling — 일일 한도. 0 = 무제한 (default).
+    # 한도 도달 시 /ingest /recommend가 503 (Gemini abuse 방어 외 *우리 측 bug*도 cap).
+    gemini_daily_budget_usd: float = Field(
+        default=0.0,
+        ge=0.0,
+        description=(
+            "Gemini 호출 일일 USD 예산. 도달 시 endpoint 503 반환. "
+            "0이면 ceiling 미적용 (dev). production은 monthly_budget/30 권장."
+        ),
+    )
+
 
 settings = Settings()
