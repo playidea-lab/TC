@@ -3,13 +3,14 @@
 import contextlib
 import logging
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 
 from the_commons.api.dependencies import (
     get_embedder,
     get_evidence_store,
     get_reciprocity_store,
 )
+from the_commons.api.rate_limit import check_and_consume, ingest_bucket
 from the_commons.api.schemas import ClusterImpact, IngestRequest, IngestResponse
 from the_commons.auth.dependencies import require_contributor
 from the_commons.auth.jwt_verify import VerifiedClaims
@@ -38,12 +39,18 @@ router = APIRouter(tags=["ingest"])
     status_code=status.HTTP_201_CREATED,
 )
 async def ingest_evidence(
+    request: Request,
     body: IngestRequest,
     claims: VerifiedClaims = Depends(require_contributor),
     store: EvidenceStore = Depends(get_evidence_store),
     reciprocity: ReciprocityEventStore = Depends(get_reciprocity_store),
     embedder: EmbeddingProvider = Depends(get_embedder),
 ) -> IngestResponse:
+    # rate limit — contributor 또는 IP 기준
+    rate_key = f"contrib:{claims.contributor_id}" if claims.contributor_id else (
+        f"ip:{request.client.host if request.client else 'unknown'}"
+    )
+    check_and_consume(ingest_bucket, rate_key)
     """ingestion 파이프라인:
     PHI 차단 → attribution → schema → store → promote/contradicts → retirement check.
     """

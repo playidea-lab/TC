@@ -2,13 +2,14 @@
 
 from typing import Any
 
-from fastapi import APIRouter, Depends
+from fastapi import APIRouter, Depends, Request
 from pydantic import BaseModel
 
 from the_commons.api.dependencies import (
     get_evidence_store,
     get_reciprocity_store,
 )
+from the_commons.api.rate_limit import check_and_consume, recommend_bucket
 from the_commons.auth.dependencies import require_contributor
 from the_commons.auth.jwt_verify import VerifiedClaims
 from the_commons.ingestion.cluster_impact import compute_problem_cluster_bucket
@@ -96,6 +97,7 @@ async def get_matchmaker_service(
 
 @router.post("/recommend", response_model=RecommendResponse)
 async def recommend(
+    request: Request,
     body: RecommendRequest,
     claims: VerifiedClaims = Depends(require_contributor),
     service: MatchmakerService = Depends(get_matchmaker_service),
@@ -105,6 +107,14 @@ async def recommend(
 
     응답에 포함된 evidence_id 각각에 대해 loop_closure event 자동 기록.
     """
+    # rate limit — /recommend가 가장 비싼 endpoint (Gemini 호출)
+    rate_key = (
+        f"contrib:{claims.contributor_id}"
+        if claims.contributor_id
+        else f"ip:{request.client.host if request.client else 'unknown'}"
+    )
+    check_and_consume(recommend_bucket, rate_key)
+
     result = await service.recommend(body.query)
 
     # consumer origin을 claim에서 추출 — v0.1엔 모두 'external'로 처리 가능 (CQ가 식별)

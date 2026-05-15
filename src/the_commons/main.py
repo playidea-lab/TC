@@ -13,12 +13,18 @@ from the_commons.api.health import router as health_router
 from the_commons.api.ingest import router as ingest_router
 from the_commons.api.recommend import router as recommend_router
 from the_commons.api.verdict import router as verdict_router
+from the_commons.logging_config import RequestIDMiddleware, configure_logging
+
+# structured logging + request_id 활성화 (settings.log_format 기준)
+configure_logging()
 
 app = FastAPI(
     title="The Commons",
     description="ML experiment evidence library + match-maker (internal)",
     version=__version__,
 )
+
+app.add_middleware(RequestIDMiddleware)
 
 app.include_router(health_router)
 app.include_router(ingest_router)
