@@ -5,13 +5,16 @@ from the_commons.reciprocity.verdict_report import build_verdict_report
 
 
 async def test_verdict_failure_with_zero_events() -> None:
-    """0 event → failure (비전 재검토)."""
+    """0 event → failure (비전 재검토). counts_by_origin은 internal/external 모두 0."""
     store = InMemoryReciprocityEventStore()
     report = await build_verdict_report(store)
 
     assert report.branch == "failure"
     assert report.is_success is False
     assert "vision revision" in report.detail
+    # A.5 — Postgres GROUP BY가 빈 origin을 omit해도 응답엔 항상 두 key 노출
+    assert report.counts_by_origin["internal"] == 0
+    assert report.counts_by_origin["external"] == 0
 
 
 async def test_verdict_partial_with_only_loop_closure() -> None:

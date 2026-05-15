@@ -40,7 +40,9 @@ async def build_verdict_report(store: ReciprocityEventStore) -> VerdictReport:
     failure: 0 event
     """
     by_type = await store.count_by_type()
-    by_origin = await store.count_by_origin()
+    raw_origin = await store.count_by_origin()
+    # Postgres GROUP BY는 event 없는 origin을 omit. internal/external 둘 다 항상 노출.
+    by_origin = {"internal": 0, "external": 0, **raw_origin}
 
     # promote / contradicts 둘 중 하나라도 ≥ 1이면 promote_or_contradict 축 충족
     pc_total = by_type.get("promote", 0) + by_type.get("contradicts", 0)
