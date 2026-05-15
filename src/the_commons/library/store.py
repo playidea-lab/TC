@@ -74,6 +74,21 @@ class EvidenceStore(Protocol):
         """L3 visibility 플래그 ON — 추천 corpus에서 제외 (record는 보존)."""
         ...
 
+    async def list_evidence(
+        self,
+        *,
+        tier: str | None = None,
+        modality: str | None = None,
+        sample_count_band: str | None = None,
+        intent_goal: str | None = None,
+        contributor_id: str | None = None,
+        deprecated: bool | None = False,
+        limit: int = 20,
+        offset: int = 0,
+    ) -> tuple[list[Evidence], int]:
+        """필터 조건으로 evidence 검색. 반환: (해당 페이지, 전체 매칭 카운트)."""
+        ...
+
 
 # ----------------------------------------------------------------------------
 # In-memory (test)
@@ -149,6 +164,43 @@ class InMemoryEvidenceStore:
         self._deprecated.add(evidence_id)
         _ = reason  # InMemory엔 audit log 별도 — RetirementBackend가 처리
 
+    async def list_evidence(
+        self,
+        *,
+        tier: str | None = None,
+        modality: str | None = None,
+        sample_count_band: str | None = None,
+        intent_goal: str | None = None,
+        contributor_id: str | None = None,
+        deprecated: bool | None = False,
+        limit: int = 20,
+        offset: int = 0,
+    ) -> tuple[list[Evidence], int]:
+        def _matches(ev: Evidence) -> bool:
+            if tier is not None and ev.tier != tier:
+                return False
+            if modality is not None and ev.data_fingerprint.modality != modality:
+                return False
+            if (
+                sample_count_band is not None
+                and ev.data_fingerprint.sample_count_band != sample_count_band
+            ):
+                return False
+            if intent_goal is not None and ev.intent.goal != intent_goal:
+                return False
+            if (
+                contributor_id is not None
+                and ev.attribution.contributor_id != contributor_id
+            ):
+                return False
+            is_deprecated = ev.evidence_id in self._deprecated
+            return not (deprecated is not None and is_deprecated != deprecated)
+
+        matched = [ev for ev in self._by_id.values() if _matches(ev)]
+        total = len(matched)
+        page = matched[offset : offset + limit]
+        return page, total
+
 
 # ----------------------------------------------------------------------------
 # PostgreSQL
@@ -201,6 +253,10 @@ WHERE evidence_id = %s AND deprecated = FALSE
 _UPDATE_EMBEDDING_SQL = """
 UPDATE evidence SET embedding = %s::vector WHERE evidence_id = %s
 """
+
+# evidence 검색 — 동적 WHERE은 _build_list_query로 조립
+_LIST_BASE_SELECT = "SELECT run_record FROM evidence"
+_LIST_BASE_COUNT = "SELECT COUNT(*) FROM evidence"
 
 
 class PostgresEvidenceStore:
@@ -270,6 +326,75 @@ class PostgresEvidenceStore:
         async with self._conn.cursor() as cur:
             await cur.execute(_UPDATE_EMBEDDING_SQL, (literal, evidence_id))
         await self._conn.commit()
+
+    async def list_evidence(
+        self,
+        *,
+        tier: str | None = None,
+        modality: str | None = None,
+        sample_count_band: str | None = None,
+        intent_goal: str | None = None,
+        contributor_id: str | None = None,
+        deprecated: bool | None = False,
+        limit: int = 20,
+        offset: int = 0,
+    ) -> tuple[list[Evidence], int]:
+        where_sql, params = _build_list_where(
+            tier=tier,
+            modality=modality,
+            sample_count_band=sample_count_band,
+            intent_goal=intent_goal,
+            contributor_id=contributor_id,
+            deprecated=deprecated,
+        )
+        select_sql = (
+            f"{_LIST_BASE_SELECT} {where_sql} "
+            "ORDER BY created_at DESC LIMIT %s OFFSET %s"
+        )
+        count_sql = f"{_LIST_BASE_COUNT} {where_sql}"
+
+        async with self._conn.cursor() as cur:
+            await cur.execute(select_sql, (*params, limit, offset))
+            rows = await cur.fetchall()
+            await cur.execute(count_sql, params)
+            count_row = await cur.fetchone()
+
+        evidences = [_row_to_evidence(row[0]) for row in rows]
+        total = int(count_row[0]) if count_row else 0
+        return evidences, total
+
+
+def _build_list_where(
+    *,
+    tier: str | None,
+    modality: str | None,
+    sample_count_band: str | None,
+    intent_goal: str | None,
+    contributor_id: str | None,
+    deprecated: bool | None,
+) -> tuple[str, tuple[Any, ...]]:
+    """필터 dict → (WHERE clause, params tuple). 비어있으면 빈 WHERE."""
+    clauses: list[str] = []
+    params: list[Any] = []
+
+    pairs = [
+        ("tier", tier),
+        ("modality", modality),
+        ("sample_count_band", sample_count_band),
+        ("intent_goal", intent_goal),
+        ("contributor_id", contributor_id),
+    ]
+    for column, value in pairs:
+        if value is not None:
+            clauses.append(f"{column} = %s")
+            params.append(value)
+
+    if deprecated is not None:
+        clauses.append("deprecated = %s")
+        params.append(deprecated)
+
+    where_sql = ("WHERE " + " AND ".join(clauses)) if clauses else ""
+    return where_sql, tuple(params)
 
 
 def _row_to_evidence(run_record_json: Any) -> Evidence:
