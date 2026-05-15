@@ -1,13 +1,15 @@
 """matchmaker service — recommend 흐름 orchestration.
 
 serialize query → embed → retrieve → fetch records → serialize each →
-listwise rerank → compose. cold start 시 heuristic fallback.
+listwise rerank → compose. cold start 또는 외부 LLM 실패 시 heuristic fallback.
 """
 
+import logging
 from dataclasses import dataclass
 
+from the_commons.library.models import Evidence
 from the_commons.library.store import EvidenceStore
-from the_commons.llm.protocol import EmbeddingProvider, LLMReranker
+from the_commons.llm.protocol import EmbeddingProvider, LLMReranker, RankedCandidate
 from the_commons.matchmaker.composer import (
     ComposedCandidate,
     CorpusContext,
@@ -16,12 +18,15 @@ from the_commons.matchmaker.composer import (
     summarize_corpus,
 )
 from the_commons.matchmaker.retriever import (
+    RetrievedHit,
     VectorIndex,
     cold_start_candidates,
     is_corpus_too_sparse,
 )
 from the_commons.matchmaker.serializer import QueryFeatures, default_registry
 from the_commons.settings import settings
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -52,12 +57,16 @@ class MatchmakerService:
         self._template_version = settings.template_version
 
     async def recommend(self, query: QueryFeatures) -> RecommendResult:
-        """end-to-end recommend 흐름."""
+        """end-to-end recommend 흐름. 외부 LLM 실패는 graceful degrade."""
         # 1. serialize query
         query_text = self._registry.serialize_query(query, version=self._template_version)
 
-        # 2. embed
-        query_vector = await self._embedder.embed(query_text)
+        # 2. embed — 실패 시 cold-start fallback
+        try:
+            query_vector = await self._embedder.embed(query_text)
+        except Exception as exc:  # noqa: BLE001 — 외부 LLM 장애 대비
+            logger.warning("embedder failed: %s — cold-start fallback", exc)
+            return await self._cold_start(query)
 
         # 3. retrieve top-K
         hits = await self._vector_index.search(query_vector, top_k=settings.retrieve_top_k)
@@ -75,12 +84,18 @@ class MatchmakerService:
             for ev in records
         ]
 
-        # 7. listwise rerank
-        ranked = await self._reranker.rerank(
-            query=query_text,
-            candidates=candidate_texts,
-            top_n=settings.recommend_top_n,
-        )
+        # 7. listwise rerank — 실패 시 similarity 순서로 fallback
+        try:
+            ranked = await self._reranker.rerank(
+                query=query_text,
+                candidates=candidate_texts,
+                top_n=settings.recommend_top_n,
+            )
+        except Exception as exc:  # noqa: BLE001
+            logger.warning(
+                "reranker failed: %s — similarity-ordered degrade", exc
+            )
+            ranked = _similarity_ordered_ranking(hits, settings.recommend_top_n)
 
         # 8. compose
         context = summarize_corpus(hits)
@@ -95,9 +110,9 @@ class MatchmakerService:
             template_version=self._template_version,
         )
 
-    async def _fetch_evidence(self, hits):
+    async def _fetch_evidence(self, hits: list[RetrievedHit]) -> list[Evidence]:
         """RetrievedHit list → Evidence list (없는 ID는 skip)."""
-        records = []
+        records: list[Evidence] = []
         for hit in hits:
             ev = await self._store.get_by_id(hit.evidence_id)
             if ev is not None:
@@ -105,7 +120,7 @@ class MatchmakerService:
         return records
 
     async def _cold_start(self, query: QueryFeatures) -> RecommendResult:
-        """corpus가 비어있을 때 휴리스틱 후보 반환."""
+        """corpus가 비어있거나 embedder가 죽었을 때 휴리스틱 후보 반환."""
         modality = query.data_fingerprint.modality
         intent_goal = query.intent.goal
         heuristics = cold_start_candidates(
@@ -130,3 +145,17 @@ class MatchmakerService:
             candidates=composed,
             template_version=self._template_version,
         )
+
+
+def _similarity_ordered_ranking(
+    hits: list[RetrievedHit], top_n: int
+) -> list[RankedCandidate]:
+    """reranker가 죽었을 때 vector cosine similarity로 fallback ranking."""
+    return [
+        RankedCandidate(
+            index=i,
+            score=hit.similarity,
+            reasoning="reranker unavailable — ranked by retrieval similarity",
+        )
+        for i, hit in enumerate(hits[:top_n])
+    ]
