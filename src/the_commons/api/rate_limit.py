@@ -10,7 +10,10 @@ import time
 from dataclasses import dataclass
 from threading import Lock
 
-from fastapi import HTTPException, status
+from fastapi import HTTPException, Request, status
+
+from the_commons.auth.jwt_verify import VerifiedClaims
+from the_commons.settings import settings
 
 
 @dataclass
@@ -72,3 +75,22 @@ def check_and_consume(bucket: TokenBucket, key: str) -> None:
             detail="rate limit exceeded — try again later",
             headers={"Retry-After": "5"},
         )
+
+
+def client_rate_key(request: Request, claims: VerifiedClaims) -> str:
+    """rate limit key 결정 — contributor_id 우선, 그다음 IP.
+
+    settings.trust_forwarded_for=True면 X-Forwarded-For 첫 항목을 client IP로
+    신뢰 (proxy 뒤 production). False면 직접 connection의 client.host만 사용
+    (spoofing 방어, single-pod dev).
+    """
+    if claims.contributor_id:
+        return f"contrib:{claims.contributor_id}"
+
+    if settings.trust_forwarded_for:
+        xff = request.headers.get("X-Forwarded-For")
+        if xff:
+            return f"ip:{xff.split(',')[0].strip()}"
+
+    host = request.client.host if request.client else "unknown"
+    return f"ip:{host}"

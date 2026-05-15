@@ -1,8 +1,8 @@
 """POST /ingest — pcq 2.x evidence를 받아 검증·정화·저장 + embedding + reciprocity."""
 
 import contextlib
-import logging
 
+import structlog
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 
 from the_commons.api.dependencies import (
@@ -10,7 +10,11 @@ from the_commons.api.dependencies import (
     get_evidence_store,
     get_reciprocity_store,
 )
-from the_commons.api.rate_limit import check_and_consume, ingest_bucket
+from the_commons.api.rate_limit import (
+    check_and_consume,
+    client_rate_key,
+    ingest_bucket,
+)
 from the_commons.api.schemas import ClusterImpact, IngestRequest, IngestResponse
 from the_commons.auth.dependencies import require_contributor
 from the_commons.auth.jwt_verify import VerifiedClaims
@@ -28,7 +32,7 @@ from the_commons.reciprocity.event_store import ReciprocityEventStore
 from the_commons.reciprocity.promote_contradict import evaluate_and_record
 from the_commons.settings import settings
 
-logger = logging.getLogger(__name__)
+logger: structlog.stdlib.BoundLogger = structlog.get_logger(__name__)
 
 router = APIRouter(tags=["ingest"])
 
@@ -46,11 +50,8 @@ async def ingest_evidence(
     reciprocity: ReciprocityEventStore = Depends(get_reciprocity_store),
     embedder: EmbeddingProvider = Depends(get_embedder),
 ) -> IngestResponse:
-    # rate limit — contributor 또는 IP 기준
-    rate_key = f"contrib:{claims.contributor_id}" if claims.contributor_id else (
-        f"ip:{request.client.host if request.client else 'unknown'}"
-    )
-    check_and_consume(ingest_bucket, rate_key)
+    # rate limit — contributor 또는 IP (X-Forwarded-For 옵션은 settings에서)
+    check_and_consume(ingest_bucket, client_rate_key(request, claims))
     """ingestion 파이프라인:
     PHI 차단 → attribution → schema → store → promote/contradicts → retirement check.
     """
@@ -108,9 +109,11 @@ async def ingest_evidence(
         await store.update_embedding(evidence.evidence_id, vector)
     except Exception as exc:  # noqa: BLE001 — 외부 LLM 실패는 retrieve 영향만
         logger.warning(
-            "embedding 실패 evidence_id=%s: %s — record는 저장됨, retrieve 불가",
-            evidence.evidence_id,
-            exc,
+            "embedding_failed",
+            evidence_id=evidence.evidence_id,
+            error=str(exc),
+            error_type=type(exc).__name__,
+            note="record is stored but not retrievable until re-embed",
         )
         conn = getattr(store, "_conn", None)
         if conn is not None:

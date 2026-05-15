@@ -7,14 +7,14 @@
 """
 
 import asyncio
-import logging
 from pathlib import Path
 
 import psycopg
+import structlog
 
 from the_commons.settings import settings
 
-logger = logging.getLogger(__name__)
+logger: structlog.stdlib.BoundLogger = structlog.get_logger(__name__)
 
 MIGRATIONS_DIR = Path(__file__).parent / "migrations"
 
@@ -36,7 +36,7 @@ async def apply_migrations() -> list[str]:
     """migrations/*.sql 적용. 적용된 파일명 list 반환."""
     sql_files = sorted(MIGRATIONS_DIR.glob("*.sql"))
     if not sql_files:
-        logger.info("적용할 마이그레이션 없음")
+        logger.info("no_migrations_to_apply")
         return []
 
     applied: list[str] = []
@@ -49,10 +49,12 @@ async def apply_migrations() -> list[str]:
 
         for sql_file in sql_files:
             if sql_file.name in already:
-                logger.info("skip %s (이미 적용됨)", sql_file.name)
+                logger.info(
+                    "migration_skip", filename=sql_file.name, reason="already_applied"
+                )
                 continue
 
-            logger.info("apply %s", sql_file.name)
+            logger.info("migration_apply", filename=sql_file.name)
             sql = sql_file.read_text()
             async with conn.cursor() as cur:
                 await cur.execute(sql)
@@ -65,7 +67,7 @@ async def apply_migrations() -> list[str]:
                         (sql_file.name,),
                     )
             applied.append(sql_file.name)
-            logger.info("  ✓ %s", sql_file.name)
+            logger.info("migration_applied", filename=sql_file.name)
 
     return applied
 
@@ -83,6 +85,8 @@ async def _schema_migration_exists(conn: psycopg.AsyncConnection) -> bool:
 
 
 if __name__ == "__main__":
-    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(message)s")
+    from the_commons.logging_config import configure_logging
+
+    configure_logging()
     applied = asyncio.run(apply_migrations())
-    print(f"적용 완료: {len(applied)} 파일")
+    logger.info("migrations_complete", count=len(applied))

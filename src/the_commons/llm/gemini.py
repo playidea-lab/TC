@@ -8,9 +8,9 @@ breaker는 plan 단계 결정).
 """
 
 import json
-import logging
 from typing import Any
 
+import structlog
 from google import genai
 from google.genai import types as genai_types
 
@@ -18,7 +18,7 @@ from the_commons.llm.cost_meter import meter
 from the_commons.llm.protocol import RankedCandidate
 from the_commons.settings import settings
 
-logger = logging.getLogger(__name__)
+logger: structlog.stdlib.BoundLogger = structlog.get_logger(__name__)
 
 
 def _make_client() -> genai.Client:
@@ -164,7 +164,11 @@ def _parse_listwise_response(
     try:
         parsed = json.loads(text)
     except json.JSONDecodeError:
-        logger.warning("rerank 응답 JSON 파싱 실패 — empty 반환")
+        logger.warning(
+            "rerank_response_parse_failed",
+            raw_preview=raw_text[:120],
+            fallback="empty_list",
+        )
         return []
 
     if not isinstance(parsed, list):

@@ -4,8 +4,9 @@ serialize query → embed → retrieve → fetch records → serialize each →
 listwise rerank → compose. cold start 또는 외부 LLM 실패 시 heuristic fallback.
 """
 
-import logging
 from dataclasses import dataclass
+
+import structlog
 
 from the_commons.library.models import Evidence
 from the_commons.library.store import EvidenceStore
@@ -26,7 +27,7 @@ from the_commons.matchmaker.retriever import (
 from the_commons.matchmaker.serializer import QueryFeatures, default_registry
 from the_commons.settings import settings
 
-logger = logging.getLogger(__name__)
+logger: structlog.stdlib.BoundLogger = structlog.get_logger(__name__)
 
 
 @dataclass(frozen=True)
@@ -65,7 +66,12 @@ class MatchmakerService:
         try:
             query_vector = await self._embedder.embed(query_text)
         except Exception as exc:  # noqa: BLE001 — 외부 LLM 장애 대비
-            logger.warning("embedder failed: %s — cold-start fallback", exc)
+            logger.warning(
+                "embedder_failed",
+                error=str(exc),
+                error_type=type(exc).__name__,
+                fallback="cold_start",
+            )
             return await self._cold_start(query)
 
         # 3. retrieve top-K
@@ -93,7 +99,10 @@ class MatchmakerService:
             )
         except Exception as exc:  # noqa: BLE001
             logger.warning(
-                "reranker failed: %s — similarity-ordered degrade", exc
+                "reranker_failed",
+                error=str(exc),
+                error_type=type(exc).__name__,
+                fallback="similarity_order",
             )
             ranked = _similarity_ordered_ranking(hits, settings.recommend_top_n)
 

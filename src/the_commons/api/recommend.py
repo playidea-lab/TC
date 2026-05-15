@@ -9,7 +9,11 @@ from the_commons.api.dependencies import (
     get_evidence_store,
     get_reciprocity_store,
 )
-from the_commons.api.rate_limit import check_and_consume, recommend_bucket
+from the_commons.api.rate_limit import (
+    check_and_consume,
+    client_rate_key,
+    recommend_bucket,
+)
 from the_commons.auth.dependencies import require_contributor
 from the_commons.auth.jwt_verify import VerifiedClaims
 from the_commons.ingestion.cluster_impact import compute_problem_cluster_bucket
@@ -108,12 +112,7 @@ async def recommend(
     응답에 포함된 evidence_id 각각에 대해 loop_closure event 자동 기록.
     """
     # rate limit — /recommend가 가장 비싼 endpoint (Gemini 호출)
-    rate_key = (
-        f"contrib:{claims.contributor_id}"
-        if claims.contributor_id
-        else f"ip:{request.client.host if request.client else 'unknown'}"
-    )
-    check_and_consume(recommend_bucket, rate_key)
+    check_and_consume(recommend_bucket, client_rate_key(request, claims))
 
     result = await service.recommend(body.query)
 

@@ -50,5 +50,15 @@ class Settings(BaseSettings):
     log_level: str = Field(default="INFO")
     log_format: str = Field(default="json", description="json | console")
 
+    # 프록시 — production에서 K8s Ingress 뒤면 True. dev/single-pod는 False.
+    trust_forwarded_for: bool = Field(
+        default=False,
+        description=(
+            "True면 X-Forwarded-For 헤더의 첫 IP를 client로 신뢰. "
+            "trusted proxy(K8s Ingress 등) 뒤에서만 True로 설정. "
+            "False면 spoofing 위험으로 사용 안 함."
+        ),
+    )
+
 
 settings = Settings()
