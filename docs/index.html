@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The Commons — Status</title>
+<style>
+  :root {
+    --bg: #0d1117; --panel: #161b22; --border: #30363d;
+    --fg: #e6edf3; --muted: #8b949e; --accent: #58a6ff;
+    --ok: #3fb950; --warn: #d29922; --pend: #8b949e;
+    --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg); color: var(--fg);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    line-height: 1.65; font-size: 15px;
+  }
+  .wrap { max-width: 880px; margin: 0 auto; padding: 64px 24px 96px; }
+  h1 { font-size: 2.2rem; font-weight: 700; letter-spacing: -0.02em; }
+  h2 {
+    font-size: 1.25rem; margin: 56px 0 16px; padding-bottom: 8px;
+    border-bottom: 1px solid var(--border); font-weight: 650;
+  }
+  p { color: var(--fg); margin: 12px 0; }
+  .lede { font-size: 1.15rem; color: var(--muted); margin: 16px 0 8px; }
+  .tagline {
+    font-family: var(--mono); font-size: 0.95rem; color: var(--accent);
+    margin: 24px 0; padding: 16px 20px; background: var(--panel);
+    border: 1px solid var(--border); border-radius: 8px;
+  }
+  code, .mono { font-family: var(--mono); font-size: 0.88em; }
+  .layers { margin: 24px 0; }
+  .layer {
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 8px; padding: 16px 20px; margin: 10px 0;
+  }
+  .layer b { color: var(--accent); }
+  .layer .role { color: var(--muted); font-size: 0.9rem; }
+  .arrow { text-align: center; color: var(--muted); font-size: 0.85rem; margin: 4px 0; }
+  table { width: 100%; border-collapse: collapse; margin: 16px 0; font-size: 0.92rem; }
+  th, td { text-align: left; padding: 9px 12px; border-bottom: 1px solid var(--border); }
+  th { color: var(--muted); font-weight: 600; font-size: 0.82rem; text-transform: uppercase; letter-spacing: 0.04em; }
+  td.mono { font-family: var(--mono); font-size: 0.85rem; }
+  .badge {
+    display: inline-block; font-size: 0.75rem; font-weight: 600;
+    padding: 2px 9px; border-radius: 999px; font-family: var(--mono);
+  }
+  .b-ok   { background: rgba(63,185,80,.15);  color: var(--ok); }
+  .b-warn { background: rgba(210,153,34,.15); color: var(--warn); }
+  .b-pend { background: rgba(139,148,158,.15);color: var(--pend); }
+  ul { margin: 12px 0 12px 22px; } li { margin: 6px 0; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fit,minmax(160px,1fr)); gap: 12px; margin: 16px 0; }
+  .stat {
+    background: var(--panel); border: 1px solid var(--border);
+    border-radius: 8px; padding: 16px; text-align: center;
+  }
+  .stat .n { font-size: 1.8rem; font-weight: 700; font-family: var(--mono); }
+  .stat .l { color: var(--muted); font-size: 0.82rem; margin-top: 4px; }
+  footer { margin-top: 72px; color: var(--muted); font-size: 0.82rem; border-top: 1px solid var(--border); padding-top: 20px; }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <h1>The Commons</h1>
+  <p class="lede">An open library + match-maker of agent-readable ML experiment evidence.</p>
+  <div class="tagline">
+    pcq writes the books. cq prints them.<br>
+    The Commons keeps them — and tells you which to read next.
+  </div>
+  <p style="color:var(--muted);font-size:0.9rem">
+    Internal stakeholder status — v0.1 / 코드 안정화 완료, 운영 배포 대기.
+    최종 갱신: 2026-05-18.
+  </p>
+
+  <h2>The Three Layers</h2>
+  <div class="layers">
+    <div class="layer"><b>pcq</b> <span class="role">— Format (the book)</span><br>
+      ML 실험 evidence의 Apache-2.0 contract. pcq 2.x: intent 3필드 + data fingerprint + synthetic 표식.</div>
+    <div class="arrow">↓ books are written</div>
+    <div class="layer"><b>cq</b> <span class="role">— Press (the printing house)</span><br>
+      분산 GPU·큐·대시보드·에이전트 루프. evidence를 생산하고 The Commons로 운반.</div>
+    <div class="arrow">↓ books arrive</div>
+    <div class="layer"><b>The Commons</b> <span class="role">— Library + Match-maker (this project)</span><br>
+      evidence 보존 · 분류 · 검색 + "이 문제 + 이 리소스 → 추천 recipe". 음성·실패 결과도 1급 자산.</div>
+  </div>
+
+  <h2>왜 The Commons인가</h2>
+  <p>
+    AutoML은 <i>자기 데이터로 자기 실험</i>만 본다. The Commons는
+    <b>다른 사용자의 실험 evidence로 너의 다음 실험을 계획</b>하고,
+    너의 결과가 다음 사람의 추천에 다시 들어간다 —
+    Wikipedia + 봇 모델을 ML 실험에 적용한 cross-user matchmaker.
+  </p>
+  <ul>
+    <li><b>Raw evidence가 1급</b> — prose 요약이 아니라 run_record 자체가 지식 단위</li>
+    <li><b>음성·실패 결과 보존</b> — "안 된 것"이 검색 공간을 좁힌다</li>
+    <li><b>Synthetic은 seed이지 destination 아님</b> — LLM 합성 evidence가 cold start를 풀고, real이 쌓이면 자동 retire</li>
+    <li><b>기여 = 멤버십</b> — reciprocity 순환 (마일리지는 v0.2)</li>
+  </ul>
+
+  <h2>v0.1 — 무엇이 동작하나</h2>
+  <div class="grid">
+    <div class="stat"><div class="n">7</div><div class="l">HTTP endpoints</div></div>
+    <div class="stat"><div class="n">242</div><div class="l">tests (223 unit + 19 integ)</div></div>
+    <div class="stat"><div class="n">12</div><div class="l">내부 모듈</div></div>
+    <div class="stat"><div class="n">22</div><div class="l">review fix (10 cycle)</div></div>
+  </div>
+  <table>
+    <tr><th>Milestone</th><th>범위</th><th>상태</th></tr>
+    <tr><td>M0 Foundation</td><td>repo·DB schema·LLM wrapper·JWT·pcq 2.x spec</td><td><span class="badge b-ok">완료</span></td></tr>
+    <tr><td>M1 Ingestion + Library</td><td>PHI 차단·attribution·L1 immutable·content hash</td><td><span class="badge b-ok">완료</span></td></tr>
+    <tr><td>M2 Match-maker</td><td>자연어 직렬화·pgvector retrieve·Gemini listwise rerank</td><td><span class="badge b-ok">완료</span></td></tr>
+    <tr><td>M3 Retirement + Reciprocity</td><td>synthetic auto-retire·3-event 측정·verdict</td><td><span class="badge b-ok">완료</span></td></tr>
+    <tr><td>M5 Seed + E2E</td><td>synthetic generator·recipe catalog·K1·K2 narrative</td><td><span class="badge b-ok">완료</span></td></tr>
+    <tr><td>M4 CQ Integration</td><td>CQ 측 client·JWT 발행·CLI</td><td><span class="badge b-pend">CQ repo 작업</span></td></tr>
+  </table>
+
+  <h2>API 표면 (Phase 1 — internal only)</h2>
+  <table>
+    <tr><th>Endpoint</th><th>역할</th></tr>
+    <tr><td class="mono">GET /health</td><td>liveness (process 살아있음)</td></tr>
+    <tr><td class="mono">GET /ready</td><td>readiness (DB 도달 가능)</td></tr>
+    <tr><td class="mono">POST /ingest</td><td>pcq 2.x evidence → 검증·embed·저장·promote/contradict</td></tr>
+    <tr><td class="mono">GET /evidence</td><td>필터·페이지네이션 검색</td></tr>
+    <tr><td class="mono">GET /evidence/{id}</td><td>L1 immutable record (verifier server-derived)</td></tr>
+    <tr><td class="mono">POST /recommend</td><td>Hybrid retrieve-and-rerank → recipe 추천 + 근거</td></tr>
+    <tr><td class="mono">GET /verdict</td><td>3-event vision metric 현황</td></tr>
+    <tr><td class="mono">GET /metrics</td><td>cost·event 운영 가시성</td></tr>
+  </table>
+
+  <h2>코드 안정화 — 10-cycle review</h2>
+  <p>
+    체계적 review로 22 fix 적용. CRITICAL(Dockerfile·rate limit·cost ceiling·structured log)
+    → HIGH(graceful degrade·readiness) → MEDIUM(test 격리·security headers) 순서.
+    모든 fix가 test로 covered. ruff clean.
+  </p>
+  <table>
+    <tr><th>등급</th><th>대표 fix</th><th>상태</th></tr>
+    <tr><td>CRITICAL ×4</td><td>Dockerfile · rate limit · cost ceiling · structured logging</td><td><span class="badge b-ok">해소</span></td></tr>
+    <tr><td>HIGH ×6</td><td>graceful LLM degrade · readiness probe · verifier 정합</td><td><span class="badge b-ok">해소</span></td></tr>
+    <tr><td>MEDIUM ×12</td><td>test 격리 · body size · security headers · path 제약</td><td><span class="badge b-ok">해소</span></td></tr>
+  </table>
+
+  <h2>3-event verdict (3개월 측정)</h2>
+  <p>v0.1 성공은 가입자 수가 아니라 비전 약속의 <i>동작</i>으로 판정:</p>
+  <ul>
+    <li><b>Loop closure</b> — 한 기여자의 evidence가 다른 기여자의 추천에 측정 가능하게 영향</li>
+    <li><b>Synthetic retirement</b> — real 누적으로 synthetic 자동 retire</li>
+    <li><b>Verification by reproduction</b> — 사용자 재현으로 promote 또는 contradicts</li>
+  </ul>
+  <p style="color:var(--muted)">
+    셋 다 3개월 내 ≥ 1 → <span class="badge b-ok">success</span> ·
+    1~2 → <span class="badge b-warn">partial</span> ·
+    0 → <span class="badge b-pend">failure (비전 재검토)</span>.
+    external origin 1건 이상이면 <i>강화된 성공</i>.
+    <b>현재: 미배포 — 측정 전.</b>
+  </p>
+
+  <h2>Tech Stack</h2>
+  <table>
+    <tr><th>영역</th><th>선택</th></tr>
+    <tr><td>Language / HTTP</td><td class="mono">Python 3.12 · FastAPI · Pydantic 2 · uv</td></tr>
+    <tr><td>Storage</td><td class="mono">PostgreSQL 16 + pgvector (HNSW 1024-dim)</td></tr>
+    <tr><td>Embedding</td><td class="mono">Gemini Embedding 2 (Matryoshka 1024)</td></tr>
+    <tr><td>Reranker</td><td class="mono">Gemini 2.5 Flash (listwise)</td></tr>
+    <tr><td>추상화</td><td>EmbeddingProvider · LLMReranker · VectorIndex · EvidenceStore Protocol — vendor 교체 자유</td></tr>
+  </table>
+
+  <h2>v0.2 backlog</h2>
+  <ul>
+    <li>분산 rate limit (Redis) · cost meter 영구화</li>
+    <li>비전·NLP modality · 외부 시드(OpenML/HF) 파이프라인</li>
+    <li>Lineage L2 · 마일리지 적립/소비 · persona 평판</li>
+    <li>Operator runbook · log PII redaction · coverage report</li>
+    <li>Local model 평가 (DeepSeek V4 / Voyage)</li>
+  </ul>
+
+  <footer>
+    The Commons — PI Lab. Apache-2.0.<br>
+    repo: <a href="https://github.com/playidea-lab/TC">github.com/playidea-lab/TC</a> ·
+    비전 문서: <a href="https://github.com/playidea-lab/TC/blob/main/README.md">README.md</a>
+  </footer>
+
+</div>
+</body>
+</html>
