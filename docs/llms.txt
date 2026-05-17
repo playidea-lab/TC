@@ -1,15 +1,24 @@
 # The Commons
 
-The Commons is an open library and match-maker of agent-readable ML
-experiment evidence. It is the third layer of PI Lab's three-layer system:
+The Commons is a cross-user match-maker for ML experiments, backed by an
+open evidence library. It is the third layer of PI Lab's three-layer system:
 `pcq` is the Apache-2.0 evidence contract, `cq` is the press that produces
 and ships evidence, and The Commons keeps that evidence — and tells you
-which experiment to read next.
+which experiment to run next.
+
+The match-maker is the role; the library is the mechanism. Its objective is
+information gain: rank the next experiment that most reduces uncertainty
+about the user's problem region, using negative and failed evidence as an
+explicit signal (what did not work narrows the search space). It is not an
+expected-metric leaderboard.
 
 The Commons does not run experiments. It is a stateless advisor: `cq` holds
 the experiment-cycle state and calls The Commons for retrieval and
 recommendation. The Commons preserves, classifies, and ranks evidence, then
-answers "this problem + these resources -> recommended recipe, with reasons".
+answers "this problem + these resources -> ranked next experiment, with
+reasons". Note: the v0.1 listwise rerank scores expected fit and is a
+placeholder for the information-gain objective; the negatives-aware reranker
+lands in a later cycle.
 
 Core identity:
 

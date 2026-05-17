@@ -3,10 +3,10 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width, initial-scale=1">
-    <title>The Commons — agent-readable ML experiment evidence library + match-maker</title>
+    <title>The Commons — cross-user ML experiment match-maker, backed by an evidence library</title>
     <meta
       name="description"
-      content="The Commons is an open library and match-maker of agent-readable ML experiment evidence — layer 3 of PI Lab's pcq / cq / The Commons system. Raw evidence is the unit, negatives are first-class, synthetic is a seed that auto-retires. A stateless cross-user recommender for ML experiments."
+      content="The Commons is a cross-user match-maker for ML experiments — layer 3 of PI Lab's pcq / cq / The Commons system. It ranks the next experiment by information gain (negatives are first-class). The open evidence library is the mechanism, not the end. Stateless advisor; cq holds cycle state."
     >
     <meta name="keywords" content="The Commons, ML experiment evidence, cross-user matchmaker, pcq, cq, experiment recommendation, pgvector, Gemini rerank, retrieve-and-rerank, negative results, synthetic evidence, reciprocity, PI Lab">
     <meta name="author" content="playidea-lab">
@@ -21,7 +21,7 @@
     <meta property="og:type" content="website">
     <meta property="og:site_name" content="The Commons">
     <meta property="og:title" content="The Commons — keep the evidence, rank what to read next">
-    <meta property="og:description" content="pcq writes the books. cq prints them. The Commons keeps them — and tells you which to read next. A cross-user ML experiment evidence library + match-maker where negatives are first-class.">
+    <meta property="og:description" content="pcq writes the books. cq prints them. The Commons keeps them — and tells you which experiment to run next. A cross-user match-maker that ranks by information gain; negatives are first-class. The library is the mechanism.">
     <meta property="og:url" content="https://playidea-lab.github.io/TC/">
     <meta property="og:image" content="https://playidea-lab.github.io/TC/og-image.svg">
     <meta property="og:image:type" content="image/svg+xml">
@@ -32,7 +32,7 @@
     <!-- Twitter / X -->
     <meta name="twitter:card" content="summary_large_image">
     <meta name="twitter:title" content="The Commons — keep the evidence, rank what to read next">
-    <meta name="twitter:description" content="Cross-user ML experiment evidence library + match-maker. Raw evidence is the unit; negatives are first-class; synthetic is a seed that auto-retires.">
+    <meta name="twitter:description" content="Cross-user ML experiment match-maker — ranks the next experiment by information gain. Negatives first-class; the evidence library is the mechanism.">
     <meta name="twitter:image" content="https://playidea-lab.github.io/TC/og-image.svg">
 
     <!-- Agent-readable surfaces (GEO / LLM discovery) -->
@@ -53,7 +53,7 @@
           "applicationCategory": "DeveloperApplication",
           "applicationSubCategory": "MachineLearning",
           "operatingSystem": "Linux, macOS",
-          "description": "An open library and match-maker of agent-readable ML experiment evidence. Layer 3 of PI Lab's pcq / cq / The Commons system. Stateless advisor that preserves, classifies, and ranks experiment evidence — negatives first-class, synthetic auto-retiring.",
+          "description": "A cross-user match-maker for ML experiments. Layer 3 of PI Lab's pcq / cq / The Commons system. Ranks the next experiment by information gain (negatives explicitly narrow the search space). The open evidence library is the mechanism, not the end. Stateless advisor; cq holds cycle state.",
           "url": "https://playidea-lab.github.io/TC/",
           "softwareVersion": "0.1",
           "license": "https://www.apache.org/licenses/LICENSE-2.0",
@@ -113,7 +113,7 @@
     <header class="topbar">
       <a class="brand" href="#top" aria-label="The Commons home">
         <span class="brand-mark">TC</span>
-        <span class="brand-text">experiment evidence library</span>
+        <span class="brand-text">experiment match-maker</span>
       </a>
       <nav class="nav" aria-label="Primary navigation">
         <a href="#layers">Layers</a>
@@ -137,7 +137,10 @@
             <strong>The Commons는 그 책을 보관하고 — 다음에 무엇을 읽을지 알려준다.</strong>
             AutoML이 아니다. 다른 사용자의 실험 evidence로 너의 다음 실험을
             계획하고, 너의 결과가 다음 사람의 추천에 다시 들어가는
-            cross-user match-maker다.
+            cross-user match-maker다. 목적함수는 <strong>정보이득</strong> —
+            문제 영역의 불확실성을 가장 줄이는 다음 실험을, 음성·실패
+            evidence를 명시적 근거로 삼아 랭킹한다. 도서관은 그 추천을
+            가능케 하는 <em>기전</em>이다.
           </p>
           <div class="hero-actions" aria-label="Primary actions">
             <a class="button primary" href="#status">v0.1 현황 보기</a>
@@ -209,9 +212,10 @@
             </p>
           </article>
           <article class="feature">
-            <h3>The Commons — Library</h3>
+            <h3>The Commons — Match-maker</h3>
             <p>
-              evidence 보존·분류·검색 + "이 문제 + 이 리소스 → 추천 recipe".
+              "이 문제 + 이 리소스 → 정보이득 최대 다음 실험" 랭킹.
+              evidence 도서관(보존·분류·검색)은 그 추천을 가능케 하는 기전.
               음성·실패 결과도 1급 자산. <em>this project.</em>
             </p>
           </article>
@@ -279,6 +283,9 @@
           <p class="section-lead">
             The Commons는 stateless. /recommend는 문제 + 리소스 제약을 받아
             Hybrid retrieve-and-rerank로 recipe와 <em>근거</em>를 돌려준다.
+            단, v0.1의 listwise rerank는 기대 적합도 순으로 점수를 매긴다 —
+            정보이득 목적함수의 <strong>placeholder(잠정 구현)</strong>이며,
+            음성 evidence를 명시 가중하는 reranker는 다음 사이클이다.
           </p>
         </div>
         <div class="mcp-tools">

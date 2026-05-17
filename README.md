@@ -1,9 +1,10 @@
 # The Commons
 
-> An open library of agent-readable ML experiment evidence.
+> A cross-user match-maker for ML experiments, backed by an open evidence library.
 >
 > Books are written in the **pcq** format. Most are produced by the **cq** service.
-> But the library itself stands apart — anyone can contribute, and everyone can read.
+> The Commons keeps them — and tells you which experiment to run next.
+> Anyone can contribute, and everyone can read.
 
 ---
 
@@ -15,10 +16,15 @@ contributed by humans and agents, organized for discovery, and preserved includi
 
 Wikipedia proved that a collective body of knowledge can be built by humans and
 bots working under the same audit trail. The Commons applies that model to
-machine-learning experiments — and uses the accumulated evidence to **advise the
-next experiment**: which solution fits which problem on which resource.
+machine-learning experiments — but the corpus is the *mechanism*, not the end.
+The end is the **match-maker**: given a problem and the resources at hand, it
+ranks the **next experiment that most reduces uncertainty about that problem
+region** — an *information-gain* objective, not an expected-metric leaderboard.
+This is why null and negative evidence is first-class: "what did not work"
+narrows the search space as much as what did.
 
-The library is not just a shelf. It is also a *match-maker*.
+The library exists so the match-maker is good. The match-maker is the role;
+the library is how it earns its recommendations.
 
 ---
 
@@ -82,13 +88,13 @@ human + agent
 └────────────────────────────────────────────────────┘
    ↕  (specs / recommendations / evidence)
 ┌────────────────────────────────────────────────────┐
-│ the     Match-maker and library                     │
+│ the     Match-maker (library is the mechanism)      │
 │ Commons • indexes worker specs from cq              │
 │         • accumulates evidence (the library)        │
-│         • turns (problem + spec) into recommended   │
-│           jobs, backed by past evidence             │
+│         • ranks the next job by information gain —  │
+│           negatives narrow the search space         │
 │         • never sees the user's data files          │
-│         • recommendations grow more accurate as the │
+│         • recommendations grow sharper as the       │
 │           corpus grows                              │
 └────────────────────────────────────────────────────┘
 ```
@@ -526,6 +532,8 @@ What exists now (private repo, alpha):
 - Python 3.12 + FastAPI service with `/health`, `/ingest`, `/evidence/{id}`, `/recommend`
 - PostgreSQL 16 + pgvector schema (7 tables, HNSW vector index)
 - Hybrid retrieve-and-rerank match-maker wired to Gemini Embedding 2 + Gemini 2.5 Flash
+  — note: the v0.1 listwise rerank scores expected fit; it is a **placeholder**
+  for the information-gain objective (negatives-aware ranking lands in a later cycle)
 - Synthetic-tier evidence + auto-retirement worker + reciprocity event store
 - K1→K2 narrative end-to-end test produces a `success` 3-event verdict
 - Live integration tests pass against real PostgreSQL and real Gemini API

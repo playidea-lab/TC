@@ -1,14 +1,15 @@
 {
   "schema_version": 1,
   "name": "The Commons",
-  "tagline": "An open library + match-maker of agent-readable ML experiment evidence.",
-  "summary": "Layer 3 of PI Lab's three-layer system. pcq is the evidence contract, cq is the press that produces evidence, The Commons keeps it and ranks which experiment to read next. Stateless advisor: cq holds cycle state and calls The Commons for retrieval and recommendation.",
+  "tagline": "A cross-user match-maker for ML experiments, backed by an open evidence library.",
+  "summary": "Layer 3 of PI Lab's three-layer system. pcq is the evidence contract, cq is the press that produces evidence, The Commons ranks which experiment to run next. The match-maker is the role; the library is the mechanism. Objective is information gain — rank the next experiment that most reduces problem-region uncertainty, using negatives as an explicit signal (not an expected-metric leaderboard). Stateless advisor: cq holds cycle state.",
   "status": {
     "version": "0.1",
     "phase": "internal-only (reachable through cq)",
     "stabilization": "code-level complete (10-cycle review, 22 fixes, 242 tests)",
     "deployment": "pending",
-    "vision_verdict": "pre-measurement (not yet deployed)"
+    "vision_verdict": "pre-measurement (not yet deployed)",
+    "recommend_objective": "information-gain (v0.1 listwise rerank = placeholder for negatives-aware ranking)"
   },
   "license": "Apache-2.0",
   "organization": {
@@ -23,13 +24,16 @@
     "llms_txt": "https://playidea-lab.github.io/TC/llms.txt"
   },
   "core_principles": [
+    "The match-maker is the role; the evidence library is the mechanism.",
+    "Objective is information gain — rank the next experiment that most reduces problem-region uncertainty, not the expected-metric winner.",
     "Raw evidence is the knowledge unit, not a prose summary.",
-    "Negative and failed results are first-class.",
+    "Negative and failed results are first-class — they explicitly narrow the search space.",
     "Synthetic evidence is a seed, not a destination — auto-retires when real accumulates.",
     "Contribution is membership — a reciprocity loop, not a one-way feed.",
     "Not AutoML — plans your next experiment from other users' evidence."
   ],
   "matchmaker": {
+    "objective": "information-gain (negatives explicit); v0.1 listwise rerank = placeholder for the negatives-aware reranker",
     "strategy": "Hybrid retrieve-and-rerank",
     "stages": [
       "natural-language serialization (template-versioned)",
