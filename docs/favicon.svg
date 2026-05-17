@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" role="img" aria-label="The Commons">
+  <rect x="2" y="2" width="60" height="60" rx="12" fill="#0f5132"/>
+  <text x="32" y="42" text-anchor="middle"
+        font-family="ui-monospace, SFMono-Regular, Menlo, monospace"
+        font-size="24" font-weight="800" fill="#e7f2ea">TC</text>
+</svg>

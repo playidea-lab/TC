@@ -1,0 +1,104 @@
+# The Commons
+
+The Commons is an open library and match-maker of agent-readable ML
+experiment evidence. It is the third layer of PI Lab's three-layer system:
+`pcq` is the Apache-2.0 evidence contract, `cq` is the press that produces
+and ships evidence, and The Commons keeps that evidence — and tells you
+which experiment to read next.
+
+The Commons does not run experiments. It is a stateless advisor: `cq` holds
+the experiment-cycle state and calls The Commons for retrieval and
+recommendation. The Commons preserves, classifies, and ranks evidence, then
+answers "this problem + these resources -> recommended recipe, with reasons".
+
+Core identity:
+
+- Raw evidence is the knowledge unit, not a prose summary. The pcq run
+  record itself is what gets stored and retrieved.
+- Negative and failed results are first-class. "What did not work" narrows
+  the search space as much as what did.
+- Synthetic evidence is a seed, not a destination. LLM-distilled evidence
+  solves cold start and auto-retires once real evidence accumulates per
+  cluster.
+- Contribution is membership. A reciprocity loop, not a one-way feed; one
+  contributor's evidence measurably shifts another contributor's
+  recommendation.
+- It is not AutoML. AutoML only sees your own data and your own runs. The
+  Commons plans your next experiment from other users' evidence, and your
+  result re-enters the next person's recommendation — a cross-user
+  match-maker for ML experiments.
+
+Status: v0.1 — code-level stabilization complete (10-cycle review, 22
+fixes, 242 tests). Phase 1 is internal only, reachable through `cq`.
+Production deployment and the 3-month vision verdict are still pending.
+
+Canonical resources:
+
+- Project page: https://playidea-lab.github.io/TC/
+- Repository: https://github.com/playidea-lab/TC
+- Vision document (README): https://github.com/playidea-lab/TC/blob/main/README.md
+- pcq input contract (vendored): https://playidea-lab.github.io/TC/pcq-2.x.md
+- Machine manifest: https://playidea-lab.github.io/TC/agent-manifest.json
+
+Match-maker architecture (Hybrid retrieve-and-rerank):
+
+1. Natural-language serialization — the pcq evidence record is rendered to
+   a template-versioned natural-language description (template_version).
+2. Embedding — Gemini Embedding 2, Matryoshka-truncated to 1024 dimensions.
+3. Retrieve — PostgreSQL 16 + pgvector, HNSW cosine, top-K (default 20).
+4. Rerank — Gemini 2.5 Flash, listwise, returns top-N (default 5) with
+   stated reasons.
+
+Every vendor seam is a Protocol — EmbeddingProvider, LLMReranker,
+VectorIndex, EvidenceStore, ReciprocityEventStore, RetirementBackend — so
+the embedding/LLM/store vendor can be swapped without touching callers.
+
+HTTP surface (Phase 1, internal, via cq):
+
+```
+GET  /health          liveness (process is up)
+GET  /ready           readiness (database reachable)
+POST /ingest          pcq 2.x evidence -> validate, embed, store, promote/contradict
+GET  /evidence        filtered, paginated search
+GET  /evidence/{id}   L1 immutable record (verifier is server-derived, not stored)
+POST /recommend       Hybrid retrieve-and-rerank -> recipe + reasons
+GET  /verdict          3-event vision-metric status
+GET  /metrics          cost and event operational visibility
+```
+
+Evidence model:
+
+- L1 immutable — the stored run record never changes.
+- L2 append-only — lineage and reciprocity events accrete, never overwrite.
+- L3 mutable visibility — synthetic-vs-real status and retirement are the
+  only mutable surface.
+- PHI is auto-blocked at ingestion. The verifier identity is derived
+  server-side at read time (a JOIN), never stored on the record.
+
+3-event vision verdict (success is defined by behavior, not signups):
+
+- Loop closure — one contributor's evidence measurably influences another
+  contributor's recommendation.
+- Synthetic retirement — accumulated real evidence auto-retires synthetic
+  for a cluster.
+- Verification by reproduction — a user's reproduction promotes or
+  contradicts a record.
+
+All three within 3 months -> success; 1-2 -> partial; 0 -> failure (vision
+re-examined). One or more events of external origin -> strengthened
+success. Current: not yet deployed — pre-measurement.
+
+Tech stack:
+
+- Python 3.12, FastAPI, Pydantic 2, uv.
+- PostgreSQL 16 + pgvector (HNSW, 1024-dim).
+- Gemini Embedding 2 (embed) + Gemini 2.5 Flash (listwise rerank).
+- structlog JSON logging, request-id middleware, token-bucket rate limit,
+  Gemini daily cost ceiling, body-size limit, OWASP baseline headers.
+
+Agent rule:
+
+The Commons reports facts and ranked candidates with reasons; the calling
+agent or service chooses policy. Prefer /recommend with explicit problem +
+resource constraints over free-text. Negatives in the result set are
+signal, not noise.

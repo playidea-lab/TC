@@ -1,0 +1,88 @@
+{
+  "schema_version": 1,
+  "name": "The Commons",
+  "tagline": "An open library + match-maker of agent-readable ML experiment evidence.",
+  "summary": "Layer 3 of PI Lab's three-layer system. pcq is the evidence contract, cq is the press that produces evidence, The Commons keeps it and ranks which experiment to read next. Stateless advisor: cq holds cycle state and calls The Commons for retrieval and recommendation.",
+  "status": {
+    "version": "0.1",
+    "phase": "internal-only (reachable through cq)",
+    "stabilization": "code-level complete (10-cycle review, 22 fixes, 242 tests)",
+    "deployment": "pending",
+    "vision_verdict": "pre-measurement (not yet deployed)"
+  },
+  "license": "Apache-2.0",
+  "organization": {
+    "name": "playidea-lab",
+    "url": "https://github.com/playidea-lab"
+  },
+  "resources": {
+    "site": "https://playidea-lab.github.io/TC/",
+    "repository": "https://github.com/playidea-lab/TC",
+    "readme": "https://github.com/playidea-lab/TC/blob/main/README.md",
+    "pcq_contract": "https://playidea-lab.github.io/TC/pcq-2.x.md",
+    "llms_txt": "https://playidea-lab.github.io/TC/llms.txt"
+  },
+  "core_principles": [
+    "Raw evidence is the knowledge unit, not a prose summary.",
+    "Negative and failed results are first-class.",
+    "Synthetic evidence is a seed, not a destination — auto-retires when real accumulates.",
+    "Contribution is membership — a reciprocity loop, not a one-way feed.",
+    "Not AutoML — plans your next experiment from other users' evidence."
+  ],
+  "matchmaker": {
+    "strategy": "Hybrid retrieve-and-rerank",
+    "stages": [
+      "natural-language serialization (template-versioned)",
+      "Gemini Embedding 2 — Matryoshka 1024-dim",
+      "pgvector HNSW cosine retrieve, top-K (default 20)",
+      "Gemini 2.5 Flash listwise rerank, top-N (default 5) with reasons"
+    ],
+    "vendor_seams": [
+      "EmbeddingProvider",
+      "LLMReranker",
+      "VectorIndex",
+      "EvidenceStore",
+      "ReciprocityEventStore",
+      "RetirementBackend"
+    ]
+  },
+  "http_surface": [
+    { "method": "GET", "path": "/health", "role": "liveness (process is up)" },
+    { "method": "GET", "path": "/ready", "role": "readiness (database reachable)" },
+    { "method": "POST", "path": "/ingest", "role": "pcq 2.x evidence -> validate, embed, store, promote/contradict" },
+    { "method": "GET", "path": "/evidence", "role": "filtered, paginated search" },
+    { "method": "GET", "path": "/evidence/{id}", "role": "L1 immutable record (verifier server-derived)" },
+    { "method": "POST", "path": "/recommend", "role": "Hybrid retrieve-and-rerank -> recipe + reasons" },
+    { "method": "GET", "path": "/verdict", "role": "3-event vision-metric status" },
+    { "method": "GET", "path": "/metrics", "role": "cost and event operational visibility" }
+  ],
+  "evidence_model": {
+    "L1": "immutable — stored run record never changes",
+    "L2": "append-only — lineage and reciprocity events accrete",
+    "L3": "mutable visibility — synthetic-vs-real status and retirement only",
+    "phi": "auto-blocked at ingestion",
+    "verifier": "server-derived at read time, never stored on the record"
+  },
+  "vision_verdict": {
+    "window_months": 3,
+    "events": [
+      "loop_closure — one contributor's evidence measurably influences another's recommendation",
+      "synthetic_retirement — accumulated real evidence auto-retires synthetic for a cluster",
+      "verification_by_reproduction — a user's reproduction promotes or contradicts a record"
+    ],
+    "thresholds": {
+      "3": "success",
+      "1-2": "partial",
+      "0": "failure (vision re-examined)",
+      "external_origin>=1": "strengthened success"
+    }
+  },
+  "tech_stack": {
+    "language": "Python 3.12",
+    "http": "FastAPI + Pydantic 2 (uv)",
+    "storage": "PostgreSQL 16 + pgvector (HNSW 1024-dim)",
+    "embedding": "Gemini Embedding 2 (Matryoshka 1024)",
+    "reranker": "Gemini 2.5 Flash (listwise)"
+  },
+  "agent_rule": "The Commons reports facts and ranked candidates with reasons; the calling agent or service chooses policy. Negatives in the result set are signal, not noise."
+}

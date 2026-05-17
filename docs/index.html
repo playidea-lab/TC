@@ -1,191 +1,440 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="ko">
-<head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>The Commons — Status</title>
-<style>
-  :root {
-    --bg: #0d1117; --panel: #161b22; --border: #30363d;
-    --fg: #e6edf3; --muted: #8b949e; --accent: #58a6ff;
-    --ok: #3fb950; --warn: #d29922; --pend: #8b949e;
-    --mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace;
-  }
-  * { box-sizing: border-box; margin: 0; padding: 0; }
-  body {
-    background: var(--bg); color: var(--fg);
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-    line-height: 1.65; font-size: 15px;
-  }
-  .wrap { max-width: 880px; margin: 0 auto; padding: 64px 24px 96px; }
-  h1 { font-size: 2.2rem; font-weight: 700; letter-spacing: -0.02em; }
-  h2 {
-    font-size: 1.25rem; margin: 56px 0 16px; padding-bottom: 8px;
-    border-bottom: 1px solid var(--border); font-weight: 650;
-  }
-  p { color: var(--fg); margin: 12px 0; }
-  .lede { font-size: 1.15rem; color: var(--muted); margin: 16px 0 8px; }
-  .tagline {
-    font-family: var(--mono); font-size: 0.95rem; color: var(--accent);
-    margin: 24px 0; padding: 16px 20px; background: var(--panel);
-    border: 1px solid var(--border); border-radius: 8px;
-  }
-  code, .mono { font-family: var(--mono); font-size: 0.88em; }
-  .layers { margin: 24px 0; }
-  .layer {
-    background: var(--panel); border: 1px solid var(--border);
-    border-radius: 8px; padding: 16px 20px; margin: 10px 0;
-  }
-  .layer b { color: var(--accent); }
-  .layer .role { color: var(--muted); font-size: 0.9rem; }
-  .arrow { text-align: center; color: var(--muted); font-size: 0.85rem; margin: 4px 0; }
-  table { width: 100%; border-collapse: collapse; margin: 16px 0; font-size: 0.92rem; }
-  th, td { text-align: left; padding: 9px 12px; border-bottom: 1px solid var(--border); }
-  th { color: var(--muted); font-weight: 600; font-size: 0.82rem; text-transform: uppercase; letter-spacing: 0.04em; }
-  td.mono { font-family: var(--mono); font-size: 0.85rem; }
-  .badge {
-    display: inline-block; font-size: 0.75rem; font-weight: 600;
-    padding: 2px 9px; border-radius: 999px; font-family: var(--mono);
-  }
-  .b-ok   { background: rgba(63,185,80,.15);  color: var(--ok); }
-  .b-warn { background: rgba(210,153,34,.15); color: var(--warn); }
-  .b-pend { background: rgba(139,148,158,.15);color: var(--pend); }
-  ul { margin: 12px 0 12px 22px; } li { margin: 6px 0; }
-  .grid { display: grid; grid-template-columns: repeat(auto-fit,minmax(160px,1fr)); gap: 12px; margin: 16px 0; }
-  .stat {
-    background: var(--panel); border: 1px solid var(--border);
-    border-radius: 8px; padding: 16px; text-align: center;
-  }
-  .stat .n { font-size: 1.8rem; font-weight: 700; font-family: var(--mono); }
-  .stat .l { color: var(--muted); font-size: 0.82rem; margin-top: 4px; }
-  footer { margin-top: 72px; color: var(--muted); font-size: 0.82rem; border-top: 1px solid var(--border); padding-top: 20px; }
-  a { color: var(--accent); text-decoration: none; }
-  a:hover { text-decoration: underline; }
-</style>
-</head>
-<body>
-<div class="wrap">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>The Commons — agent-readable ML experiment evidence library + match-maker</title>
+    <meta
+      name="description"
+      content="The Commons is an open library and match-maker of agent-readable ML experiment evidence — layer 3 of PI Lab's pcq / cq / The Commons system. Raw evidence is the unit, negatives are first-class, synthetic is a seed that auto-retires. A stateless cross-user recommender for ML experiments."
+    >
+    <meta name="keywords" content="The Commons, ML experiment evidence, cross-user matchmaker, pcq, cq, experiment recommendation, pgvector, Gemini rerank, retrieve-and-rerank, negative results, synthetic evidence, reciprocity, PI Lab">
+    <meta name="author" content="playidea-lab">
+    <meta name="theme-color" content="#0f5132">
+    <meta name="robots" content="index, follow, max-snippet:-1, max-image-preview:large">
+    <link rel="canonical" href="https://playidea-lab.github.io/TC/">
+    <link rel="alternate" hreflang="ko" href="https://playidea-lab.github.io/TC/">
+    <link rel="alternate" hreflang="x-default" href="https://playidea-lab.github.io/TC/">
+    <link rel="icon" type="image/svg+xml" href="favicon.svg">
 
-  <h1>The Commons</h1>
-  <p class="lede">An open library + match-maker of agent-readable ML experiment evidence.</p>
-  <div class="tagline">
-    pcq writes the books. cq prints them.<br>
-    The Commons keeps them — and tells you which to read next.
-  </div>
-  <p style="color:var(--muted);font-size:0.9rem">
-    Internal stakeholder status — v0.1 / 코드 안정화 완료, 운영 배포 대기.
-    최종 갱신: 2026-05-18.
-  </p>
+    <!-- Open Graph -->
+    <meta property="og:type" content="website">
+    <meta property="og:site_name" content="The Commons">
+    <meta property="og:title" content="The Commons — keep the evidence, rank what to read next">
+    <meta property="og:description" content="pcq writes the books. cq prints them. The Commons keeps them — and tells you which to read next. A cross-user ML experiment evidence library + match-maker where negatives are first-class.">
+    <meta property="og:url" content="https://playidea-lab.github.io/TC/">
+    <meta property="og:image" content="https://playidea-lab.github.io/TC/og-image.svg">
+    <meta property="og:image:type" content="image/svg+xml">
+    <meta property="og:image:width" content="1200">
+    <meta property="og:image:height" content="630">
+    <meta property="og:locale" content="ko_KR">
 
-  <h2>The Three Layers</h2>
-  <div class="layers">
-    <div class="layer"><b>pcq</b> <span class="role">— Format (the book)</span><br>
-      ML 실험 evidence의 Apache-2.0 contract. pcq 2.x: intent 3필드 + data fingerprint + synthetic 표식.</div>
-    <div class="arrow">↓ books are written</div>
-    <div class="layer"><b>cq</b> <span class="role">— Press (the printing house)</span><br>
-      분산 GPU·큐·대시보드·에이전트 루프. evidence를 생산하고 The Commons로 운반.</div>
-    <div class="arrow">↓ books arrive</div>
-    <div class="layer"><b>The Commons</b> <span class="role">— Library + Match-maker (this project)</span><br>
-      evidence 보존 · 분류 · 검색 + "이 문제 + 이 리소스 → 추천 recipe". 음성·실패 결과도 1급 자산.</div>
-  </div>
+    <!-- Twitter / X -->
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:title" content="The Commons — keep the evidence, rank what to read next">
+    <meta name="twitter:description" content="Cross-user ML experiment evidence library + match-maker. Raw evidence is the unit; negatives are first-class; synthetic is a seed that auto-retires.">
+    <meta name="twitter:image" content="https://playidea-lab.github.io/TC/og-image.svg">
 
-  <h2>왜 The Commons인가</h2>
-  <p>
-    AutoML은 <i>자기 데이터로 자기 실험</i>만 본다. The Commons는
-    <b>다른 사용자의 실험 evidence로 너의 다음 실험을 계획</b>하고,
-    너의 결과가 다음 사람의 추천에 다시 들어간다 —
-    Wikipedia + 봇 모델을 ML 실험에 적용한 cross-user matchmaker.
-  </p>
-  <ul>
-    <li><b>Raw evidence가 1급</b> — prose 요약이 아니라 run_record 자체가 지식 단위</li>
-    <li><b>음성·실패 결과 보존</b> — "안 된 것"이 검색 공간을 좁힌다</li>
-    <li><b>Synthetic은 seed이지 destination 아님</b> — LLM 합성 evidence가 cold start를 풀고, real이 쌓이면 자동 retire</li>
-    <li><b>기여 = 멤버십</b> — reciprocity 순환 (마일리지는 v0.2)</li>
-  </ul>
+    <!-- Agent-readable surfaces (GEO / LLM discovery) -->
+    <link rel="alternate" type="text/plain" href="llms.txt" title="Agent guide (llms.txt)">
+    <link rel="alternate" type="application/json" href="agent-manifest.json" title="Agent manifest">
 
-  <h2>v0.1 — 무엇이 동작하나</h2>
-  <div class="grid">
-    <div class="stat"><div class="n">7</div><div class="l">HTTP endpoints</div></div>
-    <div class="stat"><div class="n">242</div><div class="l">tests (223 unit + 19 integ)</div></div>
-    <div class="stat"><div class="n">12</div><div class="l">내부 모듈</div></div>
-    <div class="stat"><div class="n">22</div><div class="l">review fix (10 cycle)</div></div>
-  </div>
-  <table>
-    <tr><th>Milestone</th><th>범위</th><th>상태</th></tr>
-    <tr><td>M0 Foundation</td><td>repo·DB schema·LLM wrapper·JWT·pcq 2.x spec</td><td><span class="badge b-ok">완료</span></td></tr>
-    <tr><td>M1 Ingestion + Library</td><td>PHI 차단·attribution·L1 immutable·content hash</td><td><span class="badge b-ok">완료</span></td></tr>
-    <tr><td>M2 Match-maker</td><td>자연어 직렬화·pgvector retrieve·Gemini listwise rerank</td><td><span class="badge b-ok">완료</span></td></tr>
-    <tr><td>M3 Retirement + Reciprocity</td><td>synthetic auto-retire·3-event 측정·verdict</td><td><span class="badge b-ok">완료</span></td></tr>
-    <tr><td>M5 Seed + E2E</td><td>synthetic generator·recipe catalog·K1·K2 narrative</td><td><span class="badge b-ok">완료</span></td></tr>
-    <tr><td>M4 CQ Integration</td><td>CQ 측 client·JWT 발행·CLI</td><td><span class="badge b-pend">CQ repo 작업</span></td></tr>
-  </table>
+    <link rel="stylesheet" href="styles.css">
 
-  <h2>API 표면 (Phase 1 — internal only)</h2>
-  <table>
-    <tr><th>Endpoint</th><th>역할</th></tr>
-    <tr><td class="mono">GET /health</td><td>liveness (process 살아있음)</td></tr>
-    <tr><td class="mono">GET /ready</td><td>readiness (DB 도달 가능)</td></tr>
-    <tr><td class="mono">POST /ingest</td><td>pcq 2.x evidence → 검증·embed·저장·promote/contradict</td></tr>
-    <tr><td class="mono">GET /evidence</td><td>필터·페이지네이션 검색</td></tr>
-    <tr><td class="mono">GET /evidence/{id}</td><td>L1 immutable record (verifier server-derived)</td></tr>
-    <tr><td class="mono">POST /recommend</td><td>Hybrid retrieve-and-rerank → recipe 추천 + 근거</td></tr>
-    <tr><td class="mono">GET /verdict</td><td>3-event vision metric 현황</td></tr>
-    <tr><td class="mono">GET /metrics</td><td>cost·event 운영 가시성</td></tr>
-  </table>
+    <!-- JSON-LD: SoftwareApplication / SoftwareSourceCode / FAQ / Breadcrumb -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@graph": [
+        {
+          "@type": "SoftwareApplication",
+          "name": "The Commons",
+          "alternateName": "The Commons — experiment evidence library",
+          "applicationCategory": "DeveloperApplication",
+          "applicationSubCategory": "MachineLearning",
+          "operatingSystem": "Linux, macOS",
+          "description": "An open library and match-maker of agent-readable ML experiment evidence. Layer 3 of PI Lab's pcq / cq / The Commons system. Stateless advisor that preserves, classifies, and ranks experiment evidence — negatives first-class, synthetic auto-retiring.",
+          "url": "https://playidea-lab.github.io/TC/",
+          "softwareVersion": "0.1",
+          "license": "https://www.apache.org/licenses/LICENSE-2.0",
+          "programmingLanguage": "Python",
+          "author": { "@type": "Organization", "name": "playidea-lab", "url": "https://github.com/playidea-lab" },
+          "keywords": "ML experiment evidence, cross-user matchmaker, pcq, cq, retrieve-and-rerank, pgvector, Gemini, negative results, reciprocity",
+          "inLanguage": "ko"
+        },
+        {
+          "@type": "SoftwareSourceCode",
+          "name": "The Commons source",
+          "codeRepository": "https://github.com/playidea-lab/TC",
+          "programmingLanguage": "Python",
+          "license": "https://www.apache.org/licenses/LICENSE-2.0",
+          "runtimePlatform": "Python 3.12"
+        },
+        {
+          "@type": "FAQPage",
+          "mainEntity": [
+            {
+              "@type": "Question",
+              "name": "The Commons는 AutoML과 무엇이 다른가?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "AutoML은 자기 데이터로 자기 실험만 본다. The Commons는 다른 사용자의 실험 evidence로 너의 다음 실험을 계획하고, 너의 결과가 다음 사람의 추천에 다시 들어가는 cross-user match-maker다."
+              }
+            },
+            {
+              "@type": "Question",
+              "name": "음성·실패 결과를 왜 보존하나?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "\"안 된 것\"이 검색 공간을 좁힌다. The Commons에서 raw run record가 1급 지식 단위이며, 실패 evidence는 노이즈가 아니라 신호다."
+              }
+            },
+            {
+              "@type": "Question",
+              "name": "synthetic evidence는 영구적인가?",
+              "acceptedAnswer": {
+                "@type": "Answer",
+                "text": "아니다. LLM 합성 evidence는 cold start를 푸는 seed이며 destination이 아니다. cluster당 real evidence가 임계값(기본 3)에 도달하면 자동 retire된다."
+              }
+            }
+          ]
+        },
+        {
+          "@type": "BreadcrumbList",
+          "itemListElement": [
+            { "@type": "ListItem", "position": 1, "name": "The Commons", "item": "https://playidea-lab.github.io/TC/" }
+          ]
+        }
+      ]
+    }
+    </script>
+  </head>
+  <body>
+    <header class="topbar">
+      <a class="brand" href="#top" aria-label="The Commons home">
+        <span class="brand-mark">TC</span>
+        <span class="brand-text">experiment evidence library</span>
+      </a>
+      <nav class="nav" aria-label="Primary navigation">
+        <a href="#layers">Layers</a>
+        <a href="#why">Why</a>
+        <a href="#status">Status</a>
+        <a href="#api">API</a>
+        <a href="#verdict">Verdict</a>
+        <a href="#stack">Stack</a>
+        <a href="#faq">FAQ</a>
+        <a href="https://github.com/playidea-lab/TC">GitHub</a>
+      </nav>
+    </header>
 
-  <h2>코드 안정화 — 10-cycle review</h2>
-  <p>
-    체계적 review로 22 fix 적용. CRITICAL(Dockerfile·rate limit·cost ceiling·structured log)
-    → HIGH(graceful degrade·readiness) → MEDIUM(test 격리·security headers) 순서.
-    모든 fix가 test로 covered. ruff clean.
-  </p>
-  <table>
-    <tr><th>등급</th><th>대표 fix</th><th>상태</th></tr>
-    <tr><td>CRITICAL ×4</td><td>Dockerfile · rate limit · cost ceiling · structured logging</td><td><span class="badge b-ok">해소</span></td></tr>
-    <tr><td>HIGH ×6</td><td>graceful LLM degrade · readiness probe · verifier 정합</td><td><span class="badge b-ok">해소</span></td></tr>
-    <tr><td>MEDIUM ×12</td><td>test 격리 · body size · security headers · path 제약</td><td><span class="badge b-ok">해소</span></td></tr>
-  </table>
+    <main id="top">
+      <section class="hero">
+        <div class="hero-inner">
+          <p class="eyebrow">Apache-2.0 · Python · 내부 stakeholder 현황</p>
+          <h1>Keep the evidence.<br>Rank what to read next.</h1>
+          <p class="lead">
+            pcq가 책을 쓰고, cq가 인쇄한다.
+            <strong>The Commons는 그 책을 보관하고 — 다음에 무엇을 읽을지 알려준다.</strong>
+            AutoML이 아니다. 다른 사용자의 실험 evidence로 너의 다음 실험을
+            계획하고, 너의 결과가 다음 사람의 추천에 다시 들어가는
+            cross-user match-maker다.
+          </p>
+          <div class="hero-actions" aria-label="Primary actions">
+            <a class="button primary" href="#status">v0.1 현황 보기</a>
+            <a class="button secondary" href="#layers">3-layer 구조</a>
+            <a class="button secondary" href="https://github.com/playidea-lab/TC">GitHub</a>
+          </div>
+          <div class="badges" aria-label="Project status badges">
+            <a href="https://github.com/playidea-lab/TC/blob/main/LICENSE"><img height="20"
+              src="https://img.shields.io/badge/license-Apache--2.0-1f5eff.svg"
+              alt="License: Apache-2.0"></a>
+            <img height="20" src="https://img.shields.io/badge/version-v0.1-18794e.svg" alt="version v0.1">
+            <img height="20" src="https://img.shields.io/badge/tests-242%20passing-18794e.svg" alt="242 tests passing">
+            <img height="20" src="https://img.shields.io/badge/review-10%20cycle%20·%2022%20fix-18794e.svg" alt="10 cycle 22 fix">
+            <img height="20" src="https://img.shields.io/badge/python-3.12-1f5eff.svg" alt="Python 3.12">
+          </div>
+          <div class="install-line" aria-label="Status line">
+            <span>v0.1 · 코드 안정화 완료 · 운영 배포 대기 · 갱신 2026-05-18</span>
+          </div>
+        </div>
 
-  <h2>3-event verdict (3개월 측정)</h2>
-  <p>v0.1 성공은 가입자 수가 아니라 비전 약속의 <i>동작</i>으로 판정:</p>
-  <ul>
-    <li><b>Loop closure</b> — 한 기여자의 evidence가 다른 기여자의 추천에 측정 가능하게 영향</li>
-    <li><b>Synthetic retirement</b> — real 누적으로 synthetic 자동 retire</li>
-    <li><b>Verification by reproduction</b> — 사용자 재현으로 promote 또는 contradicts</li>
-  </ul>
-  <p style="color:var(--muted)">
-    셋 다 3개월 내 ≥ 1 → <span class="badge b-ok">success</span> ·
-    1~2 → <span class="badge b-warn">partial</span> ·
-    0 → <span class="badge b-pend">failure (비전 재검토)</span>.
-    external origin 1건 이상이면 <i>강화된 성공</i>.
-    <b>현재: 미배포 — 측정 전.</b>
-  </p>
+        <aside class="run-card" aria-label="What an agent receives">
+          <div class="terminal-bar">
+            <span></span>
+            <span></span>
+            <span></span>
+          </div>
+          <pre><code>$ curl -s POST /recommend \
+    -d '{"problem":"tabular cls, 12k rows",
+         "resource":{"gpu":"none","budget_min":30}}'
 
-  <h2>Tech Stack</h2>
-  <table>
-    <tr><th>영역</th><th>선택</th></tr>
-    <tr><td>Language / HTTP</td><td class="mono">Python 3.12 · FastAPI · Pydantic 2 · uv</td></tr>
-    <tr><td>Storage</td><td class="mono">PostgreSQL 16 + pgvector (HNSW 1024-dim)</td></tr>
-    <tr><td>Embedding</td><td class="mono">Gemini Embedding 2 (Matryoshka 1024)</td></tr>
-    <tr><td>Reranker</td><td class="mono">Gemini 2.5 Flash (listwise)</td></tr>
-    <tr><td>추상화</td><td>EmbeddingProvider · LLMReranker · VectorIndex · EvidenceStore Protocol — vendor 교체 자유</td></tr>
-  </table>
+{
+  "recipes": [
+    { "rank": 1, "recipe": "lightgbm-baseline",
+      "why": "동일 모달 evidence 7건 중 5건 수렴",
+      "evidence": ["ev_8c1d", "ev_2a90", ...] },
+    { "rank": 2, "recipe": "tabpfn-zeroshot",
+      "why": "<10k행 강세, 12k는 경계",
+      "caveat": "음성 evidence ev_44f1 참조" }
+  ],
+  "synthetic_used": false,
+  "verifier": "cq:run_record (server-derived)"
+}</code></pre>
+        </aside>
+      </section>
 
-  <h2>v0.2 backlog</h2>
-  <ul>
-    <li>분산 rate limit (Redis) · cost meter 영구화</li>
-    <li>비전·NLP modality · 외부 시드(OpenML/HF) 파이프라인</li>
-    <li>Lineage L2 · 마일리지 적립/소비 · persona 평판</li>
-    <li>Operator runbook · log PII redaction · coverage report</li>
-    <li>Local model 평가 (DeepSeek V4 / Voyage)</li>
-  </ul>
+      <section id="layers" class="section">
+        <div class="section-heading">
+          <p class="eyebrow">The Three Layers</p>
+          <h2>책을 쓰고, 인쇄하고, 보관한다.</h2>
+          <p class="section-lead">
+            세 레이어는 독립적이지만 하나의 계약(pcq evidence)으로 묶인다.
+            The Commons는 stateless advisor — 사이클 상태는 cq가 들고,
+            The Commons는 retrieval·recommendation만 답한다.
+          </p>
+        </div>
+        <div class="feature-grid">
+          <article class="feature">
+            <h3>pcq — Format</h3>
+            <p>
+              ML 실험 evidence의 Apache-2.0 contract. pcq 2.x: intent 3필드
+              + data fingerprint + synthetic 표식. <em>the book.</em>
+            </p>
+          </article>
+          <article class="feature">
+            <h3>cq — Press</h3>
+            <p>
+              분산 GPU·큐·대시보드·에이전트 루프. evidence를 생산하고
+              The Commons로 운반한다. <em>the printing house.</em>
+            </p>
+          </article>
+          <article class="feature">
+            <h3>The Commons — Library</h3>
+            <p>
+              evidence 보존·분류·검색 + "이 문제 + 이 리소스 → 추천 recipe".
+              음성·실패 결과도 1급 자산. <em>this project.</em>
+            </p>
+          </article>
+        </div>
+      </section>
 
-  <footer>
-    The Commons — PI Lab. Apache-2.0.<br>
-    repo: <a href="https://github.com/playidea-lab/TC">github.com/playidea-lab/TC</a> ·
-    비전 문서: <a href="https://github.com/playidea-lab/TC/blob/main/README.md">README.md</a>
-  </footer>
+      <section id="why" class="section contract-section">
+        <div class="section-heading">
+          <p class="eyebrow">왜 The Commons인가</p>
+          <h2>Wikipedia + 봇 모델을 ML 실험에 적용한다.</h2>
+          <p class="section-lead">
+            AutoML은 <em>자기 데이터로 자기 실험</em>만 본다. The Commons는
+            다른 사용자의 evidence로 너의 다음 실험을 계획하고, 너의 결과가
+            다음 사람의 추천에 다시 들어간다.
+          </p>
+        </div>
+        <ul class="check-list">
+          <li>Raw evidence가 1급 — prose 요약이 아니라 run_record 자체가 지식 단위</li>
+          <li>음성·실패 결과 보존 — "안 된 것"이 검색 공간을 좁힌다</li>
+          <li>Synthetic은 seed이지 destination 아님 — real이 쌓이면 자동 retire</li>
+          <li>기여 = 멤버십 — reciprocity 순환 (마일리지는 v0.2)</li>
+        </ul>
+      </section>
 
-</div>
-</body>
+      <section id="status" class="section">
+        <div class="section-heading">
+          <p class="eyebrow">v0.1 — 무엇이 동작하나</p>
+          <h2>코드 안정화 완료. 운영 배포 대기.</h2>
+        </div>
+        <div class="feature-grid">
+          <article class="feature">
+            <h3>7</h3>
+            <p>HTTP endpoints (Phase 1 internal)</p>
+          </article>
+          <article class="feature">
+            <h3>242</h3>
+            <p>tests — 223 unit + 19 integration</p>
+          </article>
+          <article class="feature">
+            <h3>22</h3>
+            <p>review fix · 10 cycle · ruff clean</p>
+          </article>
+        </div>
+        <div class="compare-wrap">
+          <table class="compare-table">
+            <thead>
+              <tr><th>Milestone</th><th>범위</th><th>상태</th></tr>
+            </thead>
+            <tbody>
+              <tr><th>M0 Foundation</th><td>repo · DB schema · LLM wrapper · JWT · pcq 2.x spec</td><td>완료</td></tr>
+              <tr><th>M1 Ingestion + Library</th><td>PHI 차단 · attribution · L1 immutable · content hash</td><td>완료</td></tr>
+              <tr><th>M2 Match-maker</th><td>자연어 직렬화 · pgvector retrieve · Gemini listwise rerank</td><td>완료</td></tr>
+              <tr><th>M3 Retirement + Reciprocity</th><td>synthetic auto-retire · 3-event 측정 · verdict</td><td>완료</td></tr>
+              <tr><th>M5 Seed + E2E</th><td>synthetic generator · recipe catalog · narrative</td><td>완료</td></tr>
+              <tr><th>M4 CQ Integration</th><td>CQ 측 client · JWT 발행 · CLI</td><td>CQ repo 작업</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section id="api" class="section mcp-section">
+        <div class="section-heading">
+          <p class="eyebrow">API 표면 · Phase 1 internal only</p>
+          <h2>cq를 통해서만 도달 가능한 8개 표면.</h2>
+          <p class="section-lead">
+            The Commons는 stateless. /recommend는 문제 + 리소스 제약을 받아
+            Hybrid retrieve-and-rerank로 recipe와 <em>근거</em>를 돌려준다.
+          </p>
+        </div>
+        <div class="mcp-tools">
+          <table class="tool-table">
+            <thead>
+              <tr><th>Method</th><th>Endpoint</th><th>역할</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>GET</td><td>/health</td><td>liveness (process 살아있음)</td></tr>
+              <tr><td>GET</td><td>/ready</td><td>readiness (DB 도달 가능)</td></tr>
+              <tr><td>POST</td><td>/ingest</td><td>pcq 2.x evidence → 검증·embed·저장·promote/contradict</td></tr>
+              <tr><td>GET</td><td>/evidence</td><td>필터·페이지네이션 검색</td></tr>
+              <tr><td>GET</td><td>/evidence/{id}</td><td>L1 immutable record (verifier server-derived)</td></tr>
+              <tr><td>POST</td><td>/recommend</td><td>Hybrid retrieve-and-rerank → recipe + 근거</td></tr>
+              <tr><td>GET</td><td>/verdict</td><td>3-event vision metric 현황</td></tr>
+              <tr><td>GET</td><td>/metrics</td><td>cost·event 운영 가시성</td></tr>
+            </tbody>
+          </table>
+          <p class="mcp-foot">
+            evidence 모델: <strong>L1 immutable</strong> · <strong>L2 append-only</strong> ·
+            <strong>L3 mutable visibility</strong>. PHI는 ingestion에서 자동 차단,
+            verifier는 read-time JOIN으로 server-derived (record에 저장 안 함).
+            <a href="pcq-2.x.md">pcq 2.x 입력 계약 →</a>
+          </p>
+        </div>
+      </section>
+
+      <section id="review" class="section compare-section">
+        <div class="section-heading">
+          <p class="eyebrow">코드 안정화 · 10-cycle review</p>
+          <h2>22 fix. 모두 test로 covered.</h2>
+          <p class="section-lead">
+            CRITICAL(Dockerfile · rate limit · cost ceiling · structured log)
+            → HIGH(graceful degrade · readiness) → MEDIUM(test 격리 ·
+            security headers) 순서로 체계적 해소.
+          </p>
+        </div>
+        <div class="compare-wrap">
+          <table class="compare-table">
+            <thead>
+              <tr><th>등급</th><th>대표 fix</th><th>상태</th></tr>
+            </thead>
+            <tbody>
+              <tr><th>CRITICAL ×4</th><td>Dockerfile · rate limit · cost ceiling · structured logging</td><td>해소</td></tr>
+              <tr><th>HIGH ×6</th><td>graceful LLM degrade · readiness probe · verifier 정합</td><td>해소</td></tr>
+              <tr><th>MEDIUM ×12</th><td>test 격리 · body size · security headers · path 제약</td><td>해소</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <p class="compare-foot">
+          "코드 레벨 안정화"는 완료. "운영 검증 안정화"(실배포·부하 테스트)는
+          미도달 — 정직하게 구분한다.
+        </p>
+      </section>
+
+      <section id="verdict" class="section split-section">
+        <div>
+          <p class="eyebrow">3-event verdict · 3개월 측정</p>
+          <h2>성공은 가입자 수가 아니라 비전 약속의 동작으로 판정한다.</h2>
+          <p>
+            셋 다 3개월 내 ≥ 1 → <em>success</em> · 1~2 → <em>partial</em> ·
+            0 → <em>failure (비전 재검토)</em>. external origin 1건 이상이면
+            <em>강화된 성공</em>. <strong>현재: 미배포 — 측정 전.</strong>
+          </p>
+        </div>
+        <ul class="check-list">
+          <li>Loop closure — 한 기여자의 evidence가 다른 기여자의 추천에 측정 가능하게 영향</li>
+          <li>Synthetic retirement — real 누적으로 synthetic 자동 retire</li>
+          <li>Verification by reproduction — 사용자 재현으로 promote 또는 contradicts</li>
+        </ul>
+      </section>
+
+      <section id="stack" class="section">
+        <div class="section-heading">
+          <p class="eyebrow">Tech Stack</p>
+          <h2>vendor seam은 전부 Protocol — 교체 자유.</h2>
+        </div>
+        <div class="compare-wrap">
+          <table class="compare-table">
+            <thead>
+              <tr><th>영역</th><th>선택</th></tr>
+            </thead>
+            <tbody>
+              <tr><th>Language / HTTP</th><td>Python 3.12 · FastAPI · Pydantic 2 · uv</td></tr>
+              <tr><th>Storage</th><td>PostgreSQL 16 + pgvector (HNSW 1024-dim)</td></tr>
+              <tr><th>Embedding</th><td>Gemini Embedding 2 (Matryoshka 1024)</td></tr>
+              <tr><th>Reranker</th><td>Gemini 2.5 Flash (listwise)</td></tr>
+              <tr><th>추상화</th><td>EmbeddingProvider · LLMReranker · VectorIndex · EvidenceStore Protocol</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      <section id="backlog" class="section roadmap-section">
+        <div class="section-heading">
+          <p class="eyebrow">v0.2 backlog</p>
+          <h2>운영 검증과 reciprocity 본격화.</h2>
+        </div>
+        <p class="roadmap-body">
+          <em>분산 rate limit (Redis)</em> · cost meter 영구화 ·
+          <em>비전·NLP modality</em> · 외부 시드(OpenML/HF) 파이프라인 ·
+          <em>Lineage L2</em> · 마일리지 적립/소비 · persona 평판 ·
+          operator runbook · log PII redaction · coverage report ·
+          <em>Local model 평가</em> (DeepSeek V4 / Voyage).
+        </p>
+        <p class="roadmap-links">
+          전체 비전: <a href="https://github.com/playidea-lab/TC/blob/main/README.md">README.md →</a>
+        </p>
+      </section>
+
+      <section id="faq" class="section faq-section">
+        <div class="section-heading">
+          <p class="eyebrow">FAQ</p>
+          <h2>실제로 자주 묻는 세 가지.</h2>
+        </div>
+        <div class="faq-list">
+          <details>
+            <summary>The Commons는 AutoML과 무엇이 다른가?</summary>
+            <p>AutoML은 <code>자기 데이터로 자기 실험</code>만 본다. The Commons는 다른 사용자의 실험 evidence로 너의 다음 실험을 계획하고, 너의 결과가 다음 사람의 추천에 다시 들어가는 cross-user match-maker다.</p>
+          </details>
+          <details>
+            <summary>음성·실패 결과를 왜 보존하나?</summary>
+            <p>"안 된 것"이 검색 공간을 좁힌다. The Commons에서 raw <code>run_record</code>가 1급 지식 단위이며, 실패 evidence는 노이즈가 아니라 신호다 — 추천 결과의 caveat로 직접 인용된다.</p>
+          </details>
+          <details>
+            <summary>synthetic evidence는 영구적인가?</summary>
+            <p>아니다. LLM 합성 evidence는 cold start를 푸는 seed이며 destination이 아니다. cluster당 real evidence가 임계값(<code>retirement_real_threshold</code>, 기본 3)에 도달하면 자동 <code>deprecated</code> 처리된다.</p>
+          </details>
+        </div>
+      </section>
+
+      <section class="section cq-section">
+        <div>
+          <p class="eyebrow">cq / pcq 와의 관계</p>
+          <h2>The Commons는 stateless advisor. cq가 사이클 상태를 들고 호출한다.</h2>
+        </div>
+        <div class="cq-grid">
+          <article>
+            <h3>cq</h3>
+            <p>실험 사이클 상태 보유 · evidence 생산 · JWT 발행. The Commons를 호출하는 managed consumer.</p>
+          </article>
+          <article>
+            <h3>The Commons</h3>
+            <p>상태 없음. evidence 보존·분류 + retrieve-and-rerank 추천. 사실과 근거를 돌려주고 정책은 호출자가 정한다.</p>
+          </article>
+        </div>
+      </section>
+    </main>
+
+    <footer class="footer">
+      <span>The Commons — PI Lab. Apache-2.0.</span>
+      <a href="https://github.com/playidea-lab/TC">Source</a>
+      <a href="https://github.com/playidea-lab/TC/blob/main/README.md">README</a>
+      <a href="pcq-2.x.md">pcq 2.x</a>
+      <a href="llms.txt">llms.txt</a>
+      <a href="agent-manifest.json">Agent manifest</a>
+    </footer>
+  </body>
 </html>
