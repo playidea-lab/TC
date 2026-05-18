@@ -19,7 +19,11 @@ from the_commons.auth.jwt_verify import VerifiedClaims
 from the_commons.ingestion.cluster_impact import compute_problem_cluster_bucket
 from the_commons.library.store import EvidenceStore
 from the_commons.llm.cost_meter import meter
-from the_commons.llm.gemini import GeminiEmbedding2Provider, GeminiFlash25Reranker
+from the_commons.llm.gemini import (
+    GeminiEmbedding2Provider,
+    GeminiFlash25Reranker,
+    GeminiPriorLLM,
+)
 from the_commons.llm.protocol import EmbeddingProvider, LLMReranker
 from the_commons.matchmaker.composer import ComposedCandidate, CorpusContext
 from the_commons.matchmaker.infogain.llm_prior import PriorLLM
@@ -74,28 +78,13 @@ async def get_reranker() -> LLMReranker:
     return GeminiFlash25Reranker()
 
 
-class _GeminiPriorLLM:
-    """PriorLLM 어댑터 — 저데이터 regime Beta prior 추출용 텍스트 생성.
-
-    composition root(이 wiring 파일)에서만 쓰는 얇은 어댑터. genai
-    client는 lazy — google_api_key 없으면 호출 시점에 RuntimeError,
-    llm_prior가 RR6로 weak default degrade.
-    """
-
-    async def complete(self, prompt: str) -> str:
-        from google import genai
-
-        client = genai.Client(api_key=settings.google_api_key)
-        response = client.models.generate_content(
-            model=settings.gemini_reranker_model,
-            contents=prompt,
-        )
-        return response.text or ""
-
-
 async def get_infogain_reranker() -> InfoGainReranker:
-    """production 정보이득 reranker. test는 dependency_overrides로 교체."""
-    llm: PriorLLM = _GeminiPriorLLM()
+    """production 정보이득 reranker. test는 dependency_overrides로 교체.
+
+    GeminiPriorLLM은 meter.record로 비용 보고 — prior 호출도 일일 cost
+    ceiling에 포함된다 (계측 누락 = ceiling 우회 방지).
+    """
+    llm: PriorLLM = GeminiPriorLLM()
     return InfoGainReranker(llm=llm)
 
 

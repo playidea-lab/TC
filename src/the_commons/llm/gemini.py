@@ -106,6 +106,36 @@ class GeminiFlash25Reranker:
         return ranked
 
 
+class GeminiPriorLLM:
+    """저데이터 regime Beta prior 추출용 텍스트 생성 (PriorLLM 구현).
+
+    GeminiFlash25Reranker와 동일하게 meter.record로 비용을 보고한다 —
+    일일 cost ceiling이 prior 호출도 포함하도록 (계측 누락 = ceiling 우회).
+    """
+
+    def __init__(self, model: str | None = None) -> None:
+        self._model = model or settings.gemini_reranker_model
+        self._client = _make_client()
+
+    async def complete(self, prompt: str) -> str:
+        response = self._client.models.generate_content(
+            model=self._model,
+            contents=prompt,
+        )
+        text = response.text or ""
+
+        usage = getattr(response, "usage_metadata", None)
+        in_tokens = getattr(usage, "prompt_token_count", _approx_tokens(prompt))
+        out_tokens = getattr(usage, "candidates_token_count", _approx_tokens(text))
+        meter.record(
+            model=self._model,
+            operation="prior",
+            input_tokens=in_tokens,
+            output_tokens=out_tokens,
+        )
+        return text
+
+
 # ----------------------------------------------------------------------------
 # Helpers
 # ----------------------------------------------------------------------------
