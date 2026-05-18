@@ -83,5 +83,28 @@ class Settings(BaseSettings):
         ),
     )
 
+    # 서비스화 게이트 임계 — 전부 sentinel 기본 (숫자 발명 금지, 출시 후
+    # 데이터로 보정). 미설정이면 해당 조건은 "측정 불가" → 거짓 통과 금지.
+    productization_promote_rate_floor: float = Field(
+        default=-1.0,
+        description="재현 promote-rate 바닥. -1.0=미설정 → C3 측정 불가.",
+    )
+    productization_min_reproductions: int = Field(
+        default=0,
+        ge=0,
+        description=(
+            "C3 산정 최소 재현(promote+contradicts) 건수. "
+            "0 또는 미달이면 C3 측정 불가 (small-N 거짓 통과 방어)."
+        ),
+    )
+    productization_gate_escape_windows: int = Field(
+        default=0,
+        ge=0,
+        description=(
+            "연속 미트립 verdict window가 이 수 이상이면 강제 재결정 요구. "
+            "0이면 강제 재결정 비활성."
+        ),
+    )
+
 
 settings = Settings()
