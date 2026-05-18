@@ -1,7 +1,7 @@
 # The Commons
 
 The Commons is a cross-user match-maker for ML experiments, backed by an
-open evidence library. It is the third layer of PI Lab's three-layer system:
+evidence library. It is the third layer of PI Lab's three-layer system:
 `pcq` is the Apache-2.0 evidence contract, `cq` is the press that produces
 and ships evidence, and The Commons keeps that evidence — and tells you
 which experiment to run next.
@@ -29,9 +29,14 @@ Core identity:
 - Synthetic evidence is a seed, not a destination. LLM-distilled evidence
   solves cold start and auto-retires once real evidence accumulates per
   cluster.
-- Contribution is membership. A reciprocity loop, not a one-way feed; one
-  contributor's evidence measurably shifts another contributor's
-  recommendation.
+- Contribution earns standing. One contributor's evidence measurably shifts
+  another contributor's recommendation; contributors receive attribution and
+  mileage for what they deposit.
+- Ownership: PI Lab proprietary platform (Palantir / HuggingFace posture).
+  The code is open source (Apache-2.0, self-hostable). The PI Lab–operated
+  instance and the collected corpus are PI Lab assets — not a public-domain
+  commons. No contributor data license; corpus export exists for disaster
+  recovery and migration, not as an anti-privatization guarantee.
 - It is not AutoML. AutoML only sees your own data and your own runs. The
   Commons plans your next experiment from other users' evidence, and your
   result re-enters the next person's recommendation — a cross-user

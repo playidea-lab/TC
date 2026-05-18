@@ -1,18 +1,19 @@
 # The Commons
 
-> A cross-user match-maker for ML experiments, backed by an open evidence library.
+> A cross-user match-maker for ML experiments, backed by an evidence library.
 >
 > Books are written in the **pcq** format. Most are produced by the **cq** service.
 > The Commons keeps them — and tells you which experiment to run next.
-> Anyone can contribute, and everyone can read.
+> PI Lab operates the platform; contributors earn attribution and mileage.
 
 ---
 
 ## What This Is
 
-A public library of *raw experiment evidence* (`run_record.json` and its kin),
-contributed by humans and agents, organized for discovery, and preserved including
-**null and negative results** — the kind of evidence that disappears everywhere else.
+A PI Lab–operated library of *raw experiment evidence* (`run_record.json` and its
+kin), contributed by humans and agents, organized for discovery, and preserved
+including **null and negative results** — the kind of evidence that disappears
+everywhere else.
 
 Wikipedia proved that a collective body of knowledge can be built by humans and
 bots working under the same audit trail. The Commons applies that model to
@@ -262,9 +263,11 @@ did.
    through cq, locally, in CI, or via a third-party runner — is a member of The
    Commons. No gatekeepers between researcher and shelf.
 
-5. **The library outlives any single operator.** Evidence is owned by the
-   contributor under a permissive license; the corpus is portable and cannot
-   be privatized by any operator, including PI Lab itself (see Governance).
+5. **The corpus is a durable PI Lab asset.** PI Lab owns and operates the
+   collected corpus; contributors receive attribution and mileage for what
+   they deposit. Full corpus export exists for disaster recovery and to avoid
+   single-database lock-in — an operational durability property, not an
+   anti-privatization promise (see Governance).
 
 ---
 
@@ -272,14 +275,15 @@ did.
 
 The Commons is not a feature of cq. It is a library, not a press.
 
-- Different **license model**: contributor license for evidence (CDLA-Permissive
-  family, exact variant TBD) — distinct from cq's own commercial terms.
+- Different **asset model**: the collected corpus is a PI Lab asset; the code
+  is open source (Apache-2.0). Contributors get attribution + mileage, not
+  evidence ownership.
 - Different **development cadence**: slow, durable infrastructure — not a SaaS
   release schedule.
 - Different **identity**: cq must be usable without contributing; The Commons
-  must be readable without paying.
-- Different **ownership invariant**: the corpus is portable and cannot be
-  privatized by any operator (see Governance).
+  is the cross-user knowledge layer behind it.
+- Different **durability invariant**: the corpus is fully exportable for
+  disaster recovery / migration (operational, not anti-privatization).
 
 These differences hold even while a single operator (currently PI Lab) runs
 both layers. Holding them in one project would force compromises — license
@@ -458,36 +462,30 @@ break downstream lineage edges and undermine the audit trail.
 
 ## Governance
 
-**Operating model — PI Lab + community.**
-PI Lab operates The Commons and funds its infrastructure. Contributors and
-PI Lab are members of the same ecosystem (the Palantir / HuggingFace / GitHub
-posture), not customers of a service. The match-maker, the library, and the
-press grow together.
+**Ownership model — PI Lab proprietary platform (Palantir / HuggingFace posture).**
+PI Lab owns and operates The Commons and funds its infrastructure. The
+**code is open source (Apache-2.0)** — anyone may self-host. The **operated
+instance and the collected corpus are PI Lab assets**. Contributors are not
+giving up nothing: they receive **attribution and mileage** for what they
+deposit (the platform is the vendor's; the contributor's standing accrues to
+them — the Palantir model the user chose).
 
-**Day-one commitments — these do not require a separate foundation to be true:**
+**What this means concretely:**
 
-- Evidence is owned by the contributor, not by PI Lab. A permissive
-  contributor license (CDLA-Permissive family, exact variant TBD) ensures
-  that PI Lab cannot privatize or re-license deposited evidence.
-- Reading The Commons is free for anyone, regardless of contribution status.
-- Curation and governance decisions are surfaced through public RFCs with
-  a public changelog.
-- Evidence is **portable by license** — if any operator (including PI Lab)
-  ever becomes a poor steward, the corpus can be mirrored and continued
-  elsewhere. The library is not a hostage to its operator.
+- The code may be self-hosted under Apache-2.0; the PI Lab–operated corpus is
+  PI Lab's asset, not a public-domain commons.
+- Contributors get **attribution + mileage**, not evidence ownership or a
+  permissive evidence license. There is no contributor data license.
+- Access is mediated by the platform (via cq and mileage), not an
+  unconditional free public read.
+- Full corpus export exists for **disaster recovery, DB-host independence,
+  and migration** — an operational durability property. It is *not* an
+  anti-privatization or "outlives the operator" guarantee.
 
-**Future governance — left genuinely open.**
-If and when the corpus matures (broad external contributor base, independent
-revenue streams, institutional interest), governance can evolve toward more
-distributed forms — federated stewardship, an independent foundation, or
-arrangements not foreseen today. The shape and timing of that evolution are
-decided when there is data to decide them, rather than pre-committed before
-the library exists.
-
-This posture is borrowed from early Wikipedia (operated by Wales before
-Wikimedia Foundation was established) and early HuggingFace (a single
-operator running an open ecosystem with portable contributions). It commits
-to *non-privatization* without committing to a *specific* future structure.
+**Future governance — at PI Lab's discretion.**
+Any evolution of the ownership or access model is a PI Lab business decision,
+made when there is data to decide it. No external-foundation or
+non-privatization commitment is made or implied.
 
 ---
 
@@ -539,8 +537,8 @@ What exists now (private repo, alpha):
 - Live integration tests pass against real PostgreSQL and real Gemini API
 
 What is **not** yet live: public ingestion endpoint, hosted deployment, the
-contributor license, an external onboarding flow. Those are M4 (CQ integration)
-and launch tasks.
+mileage/attribution terms, an external onboarding flow. Those are M4 (CQ
+integration) and launch tasks.
 
 ---
 
@@ -664,7 +662,8 @@ The vision is captured. The next concrete steps are not in this README — they
 belong in design and planning documents that follow once the vision settles.
 
 Concrete questions still open:
-- Exact contributor license (specific variant within the CDLA-Permissive family).
+- Exact mileage/attribution terms (earn/spend, attribution scope) — no
+  contributor data license; the corpus is a PI Lab asset.
 - **pcq 2.x specification** — data fingerprint fields, intent format, PHI
   exclusion rules at the format level.
 - Ingestion surface — public API shape, validation pipeline, federation.

@@ -1,6 +1,16 @@
 # The Commons — Vision Refinement Cycle
 
-> ML 실험 evidence의 공개 도서관 + 매치메이커. 기여와 활용이 마일리지로 순환하는 통합 ecosystem.
+> ⚠️ **거버넌스 정정 (2026-05-19, 사용자 권위):** 이 카드의 거버넌스
+> 결정(#3 "분사 약속 약화", #거버넌스 "사유 자산 아님 / evidence는
+> contributor 귀속 / CDLA / 사유화·재라이선싱 불가 / 무료 read")은
+> **폐기**된다. 확정 모델: TC는 **PI Lab 사유 플랫폼**(팔란티어/HF식).
+> 코드만 Apache-2.0 OSS(self-host 가능), 운영 인스턴스·수집 코퍼스는
+> **PI Lab 자산**, 기여자는 **귀속+마일리지**(데이터 소유 아님). 위키피디아/
+> 모질라식 "공공재·사유 불가" 프레이밍은 중간 과회전이었고 팔란티어
+> 결정으로 복원됨. 다른 섹션(stateless/intent/immutability/마일리지 기전)은
+> 유효. 상세: memory `project_tc_governance.md`.
+
+> ML 실험 evidence의 매치메이커 + (PI Lab 운영) 도서관. 기여는 마일리지·귀속으로 보상.
 
 ## 왜 이 아이디어인가
 

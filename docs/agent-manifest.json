@@ -1,8 +1,8 @@
 {
   "schema_version": 1,
   "name": "The Commons",
-  "tagline": "A cross-user match-maker for ML experiments, backed by an open evidence library.",
-  "summary": "Layer 3 of PI Lab's three-layer system. pcq is the evidence contract, cq is the press that produces evidence, The Commons ranks which experiment to run next. The match-maker is the role; the library is the mechanism. Objective is information gain — rank the next experiment that most reduces problem-region uncertainty, using negatives as an explicit signal (not an expected-metric leaderboard). Stateless advisor: cq holds cycle state.",
+  "tagline": "A cross-user match-maker for ML experiments, backed by a PI Lab–operated evidence library.",
+  "summary": "Layer 3 of PI Lab's three-layer system. pcq is the evidence contract, cq is the press that produces evidence, The Commons ranks which experiment to run next. The match-maker is the role; the library is the mechanism. Objective is information gain — rank the next experiment that most reduces problem-region uncertainty, using negatives as an explicit signal (not an expected-metric leaderboard). Stateless advisor: cq holds cycle state. Ownership: PI Lab proprietary platform (Palantir/HuggingFace posture) — code is Apache-2.0 OSS (self-hostable); the operated instance and collected corpus are PI Lab assets; contributors get attribution + mileage, not evidence ownership.",
   "status": {
     "version": "0.1",
     "phase": "internal-only (reachable through cq)",
@@ -29,7 +29,7 @@
     "Raw evidence is the knowledge unit, not a prose summary.",
     "Negative and failed results are first-class — they explicitly narrow the search space.",
     "Synthetic evidence is a seed, not a destination — auto-retires when real accumulates.",
-    "Contribution is membership — a reciprocity loop, not a one-way feed.",
+    "Contribution earns attribution + mileage — PI Lab proprietary platform, code is Apache-2.0 OSS, corpus is a PI Lab asset.",
     "Not AutoML — plans your next experiment from other users' evidence."
   ],
   "matchmaker": {
