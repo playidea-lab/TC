@@ -22,6 +22,8 @@ from the_commons.llm.cost_meter import meter
 from the_commons.llm.gemini import GeminiEmbedding2Provider, GeminiFlash25Reranker
 from the_commons.llm.protocol import EmbeddingProvider, LLMReranker
 from the_commons.matchmaker.composer import ComposedCandidate, CorpusContext
+from the_commons.matchmaker.infogain.llm_prior import PriorLLM
+from the_commons.matchmaker.infogain.reranker import InfoGainReranker
 from the_commons.matchmaker.retriever import PgvectorVectorIndex, VectorIndex
 from the_commons.matchmaker.serializer import QueryFeatures
 from the_commons.matchmaker.service import MatchmakerService
@@ -68,8 +70,33 @@ async def get_embedder() -> EmbeddingProvider:
 
 
 async def get_reranker() -> LLMReranker:
-    """production reranker. test는 dependency_overrides로 교체."""
+    """production reranker (infogain 미가용 시 fallback). test는 override."""
     return GeminiFlash25Reranker()
+
+
+class _GeminiPriorLLM:
+    """PriorLLM 어댑터 — 저데이터 regime Beta prior 추출용 텍스트 생성.
+
+    composition root(이 wiring 파일)에서만 쓰는 얇은 어댑터. genai
+    client는 lazy — google_api_key 없으면 호출 시점에 RuntimeError,
+    llm_prior가 RR6로 weak default degrade.
+    """
+
+    async def complete(self, prompt: str) -> str:
+        from google import genai
+
+        client = genai.Client(api_key=settings.google_api_key)
+        response = client.models.generate_content(
+            model=settings.gemini_reranker_model,
+            contents=prompt,
+        )
+        return response.text or ""
+
+
+async def get_infogain_reranker() -> InfoGainReranker:
+    """production 정보이득 reranker. test는 dependency_overrides로 교체."""
+    llm: PriorLLM = _GeminiPriorLLM()
+    return InfoGainReranker(llm=llm)
 
 
 async def get_vector_index(
@@ -87,12 +114,14 @@ async def get_matchmaker_service(
     vector_index: VectorIndex = Depends(get_vector_index),
     reranker: LLMReranker = Depends(get_reranker),
     store: EvidenceStore = Depends(get_evidence_store),
+    infogain_reranker: InfoGainReranker = Depends(get_infogain_reranker),
 ) -> MatchmakerService:
     return MatchmakerService(
         embedder=embedder,
         vector_index=vector_index,
         reranker=reranker,
         store=store,
+        infogain_reranker=infogain_reranker,
     )
 
 

@@ -18,6 +18,7 @@ from the_commons.matchmaker.composer import (
     compose_candidates,
     summarize_corpus,
 )
+from the_commons.matchmaker.infogain.reranker import InfoGainReranker
 from the_commons.matchmaker.retriever import (
     RetrievedHit,
     VectorIndex,
@@ -49,11 +50,15 @@ class MatchmakerService:
         vector_index: VectorIndex,
         reranker: LLMReranker,
         store: EvidenceStore,
+        infogain_reranker: InfoGainReranker | None = None,
     ) -> None:
         self._embedder = embedder
         self._vector_index = vector_index
         self._reranker = reranker
         self._store = store
+        # infogain_reranker 주입 시 step7은 정보이득 경로 (v0.1 listwise 대체).
+        # 미주입 시 기존 LLMReranker listwise 경로 유지 (degrade 계약 보존).
+        self._infogain = infogain_reranker
         self._registry = default_registry()
         self._template_version = settings.template_version
 
@@ -84,27 +89,46 @@ class MatchmakerService:
         # 5. fetch evidence records
         records = await self._fetch_evidence(hits)
 
-        # 6. serialize each evidence
-        candidate_texts = [
-            self._registry.serialize_evidence(ev, version=self._template_version)
-            for ev in records
-        ]
-
-        # 7. listwise rerank — 실패 시 similarity 순서로 fallback
-        try:
-            ranked = await self._reranker.rerank(
-                query=query_text,
-                candidates=candidate_texts,
-                top_n=settings.recommend_top_n,
-            )
-        except Exception as exc:  # noqa: BLE001
-            logger.warning(
-                "reranker_failed",
-                error=str(exc),
-                error_type=type(exc).__name__,
-                fallback="similarity_order",
-            )
-            ranked = _similarity_ordered_ranking(hits, settings.recommend_top_n)
+        # 6+7. rerank — 정보이득 경로(주입 시) 또는 기존 listwise.
+        #      어느 경로든 실패 시 similarity 순서로 graceful degrade.
+        if self._infogain is not None:
+            try:
+                ranked = await self._infogain.rerank(
+                    query_text, hits, records, settings.recommend_top_n
+                )
+            except Exception as exc:  # noqa: BLE001 — 외부/수치 장애 대비
+                logger.warning(
+                    "infogain_reranker_failed",
+                    error=str(exc),
+                    error_type=type(exc).__name__,
+                    fallback="similarity_order",
+                )
+                ranked = _similarity_ordered_ranking(
+                    hits, settings.recommend_top_n
+                )
+        else:
+            candidate_texts = [
+                self._registry.serialize_evidence(
+                    ev, version=self._template_version
+                )
+                for ev in records
+            ]
+            try:
+                ranked = await self._reranker.rerank(
+                    query=query_text,
+                    candidates=candidate_texts,
+                    top_n=settings.recommend_top_n,
+                )
+            except Exception as exc:  # noqa: BLE001
+                logger.warning(
+                    "reranker_failed",
+                    error=str(exc),
+                    error_type=type(exc).__name__,
+                    fallback="similarity_order",
+                )
+                ranked = _similarity_ordered_ranking(
+                    hits, settings.recommend_top_n
+                )
 
         # 8. compose
         context = summarize_corpus(hits)
