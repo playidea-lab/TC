@@ -112,6 +112,21 @@ Tech stack:
 - structlog JSON logging, request-id middleware, token-bucket rate limit,
   Gemini daily cost ceiling, body-size limit, OWASP baseline headers.
 
+Known v0.1 limitations (honest disclosure — v0.2 cycles):
+
+- L2 immutability is policy-level, not DB-enforced. reciprocity_event,
+  retirement_audit, and lineage_edge are append-only by convention; no
+  trigger or grant prevents UPDATE/DELETE in v0.1.
+- Operator audit trail absent — PI Lab operator mutations are policy-
+  permitted (proprietary platform), with detection limited to the corpus-
+  export round-trip release gate; no continuous tamper-detect.
+- Embedding stale auto-recompute absent — embedding_template_ver tracks
+  the template version but a Gemini model bump leaves prior embeddings
+  in place until re-ingest.
+- lineage_edge (derives_from, reproduces, contradicts, compared_to) is
+  accepted and stored from v0.1 but the match-maker does not read it yet
+  (forward-compat reservation; v0.2 activates lineage-aware ranking).
+
 Agent rule:
 
 The Commons reports facts and ranked candidates with reasons; the calling

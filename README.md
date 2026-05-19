@@ -540,6 +540,19 @@ What is **not** yet live: public ingestion endpoint, hosted deployment, the
 mileage/attribution terms, an external onboarding flow. Those are M4 (CQ
 integration) and launch tasks.
 
+**Known v0.1 limitations (정직 표기 — v0.2 정정 대상):**
+- **L2 immutability is policy-level**, not DB-enforced. `reciprocity_event`,
+  `retirement_audit`, `lineage_edge` are append-only by convention; no trigger
+  or grant prevents UPDATE/DELETE. (v0.2 ops cycle.)
+- **Operator (PI Lab) mutation has no audit trail**. Governance is
+  proprietary-platform (Palantir posture), so operator changes are policy-
+  permitted, but mutation detection relies on the corpus-export round-trip
+  release gate — there is no continuous tamper-detect. (Separate
+  governance-honesty cycle.)
+- **Embedding staleness has no automatic recompute** trigger. The
+  `embedding_template_ver` column tracks the template version, but a model
+  bump leaves prior embeddings in place until re-ingest. (v0.2.)
+
 ---
 
 ## Development (v0.1)

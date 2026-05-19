@@ -9,7 +9,13 @@
     "stabilization": "code-level complete (10-cycle review, 22 fixes, 242 tests)",
     "deployment": "pending",
     "vision_verdict": "pre-measurement (not yet deployed)",
-    "recommend_objective": "information-gain (v0.1 listwise rerank = placeholder for negatives-aware ranking)"
+    "recommend_objective": "information-gain (v0.1 listwise rerank = placeholder for negatives-aware ranking)",
+    "known_v01_limitations": [
+      "L2 immutability is policy-level, not DB-enforced (reciprocity_event/retirement_audit/lineage_edge append-only by convention; v0.2 ops cycle)",
+      "Operator audit trail absent — PI Lab mutations policy-permitted; detection limited to corpus-export round-trip release gate (separate governance-honesty cycle)",
+      "Embedding stale auto-recompute absent — embedding_template_ver tracks but a model bump leaves prior embeddings until re-ingest (v0.2)",
+      "lineage_edge (derives_from/reproduces/contradicts/compared_to) stored from v0.1 but match-maker does not read it yet (forward-compat; v0.2 activates lineage-aware ranking)"
+    ]
   },
   "license": "Apache-2.0",
   "organization": {

@@ -382,15 +382,23 @@
 
       <section id="backlog" class="section roadmap-section">
         <div class="section-heading">
-          <p class="eyebrow">v0.2 backlog</p>
+          <p class="eyebrow">v0.2 backlog · v0.1 알려진 한계</p>
           <h2>운영 검증과 reciprocity 본격화.</h2>
         </div>
         <p class="roadmap-body">
           <em>분산 rate limit (Redis)</em> · cost meter 영구화 ·
           <em>비전·NLP modality</em> · 외부 시드(OpenML/HF) 파이프라인 ·
-          <em>Lineage L2</em> · 마일리지 적립/소비 · persona 평판 ·
+          <em>Lineage L2 active</em> (저장은 v0.1, 활용은 v0.2) ·
+          마일리지 적립/소비 · persona 평판 ·
           operator runbook · log PII redaction · coverage report ·
           <em>Local model 평가</em> (DeepSeek V4 / Voyage).
+        </p>
+        <p class="roadmap-body">
+          <strong>v0.1 알려진 한계 (정직 표기):</strong>
+          L2 immutability는 정책 수준(DB enforce v0.2) ·
+          운영자 변조 audit trail 없음(corpus export round-trip 게이트로만 detect) ·
+          embedding stale 자동 재계산 없음(embedding_template_ver 추적만) ·
+          lineage_edge는 v0.1부터 *저장*되지만 매치메이커는 *읽지 않음*(forward-compat).
         </p>
         <p class="roadmap-links">
           전체 비전: <a href="https://github.com/playidea-lab/TC/blob/main/README.md">README.md →</a>
