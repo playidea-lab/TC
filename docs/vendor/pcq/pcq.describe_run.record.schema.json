@@ -1,0 +1,844 @@
+{
+  "$schema": "https://json-schema.org/draft-07/schema#",
+  "$id": "https://playidea-lab.github.io/pcq/spec/schemas/pcq.describe_run.record.schema.json",
+  "title": "pcq.describe_run.record",
+  "description": "pcq describe-run --json for a readable RunRecord",
+  "type": "object",
+  "additionalProperties": true,
+  "required": [
+    "decision_facts",
+    "dirty",
+    "epochs_completed",
+    "output_dir",
+    "partial",
+    "schema_version",
+    "status",
+    "validation_status"
+  ],
+  "properties": {
+    "artifacts": {
+      "type": "array"
+    },
+    "artifacts_summary": {
+      "type": "object"
+    },
+    "attribution": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "schema_version": {
+          "type": "integer",
+          "const": 1
+        },
+        "author": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "type": "string",
+              "enum": [
+                "human",
+                "agent"
+              ]
+            },
+            "id": {
+              "type": "string"
+            },
+            "persona_id": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          "required": [
+            "kind",
+            "id"
+          ]
+        },
+        "committer": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "type": "string",
+              "enum": [
+                "human",
+                "agent"
+              ]
+            },
+            "id": {
+              "type": "string"
+            },
+            "persona_id": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          "required": [
+            "kind",
+            "id"
+          ]
+        },
+        "operator": {
+          "type": "string"
+        },
+        "session_id": {
+          "type": [
+            "string",
+            "null"
+          ]
+        }
+      },
+      "required": [
+        "schema_version",
+        "author",
+        "committer",
+        "operator"
+      ]
+    },
+    "attribution_author_kind": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "attribution_committer_kind": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "attribution_operator": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "attribution_session_id": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "best": {
+      "type": "object"
+    },
+    "best_epoch": {
+      "type": "integer"
+    },
+    "best_value": {
+      "type": "number"
+    },
+    "cmd": {
+      "type": "string"
+    },
+    "contract_version": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "decision_facts": {
+      "type": "object"
+    },
+    "dirty": {
+      "type": "boolean"
+    },
+    "duration_seconds": {
+      "type": "number"
+    },
+    "epochs_completed": {
+      "type": "integer"
+    },
+    "failure": {
+      "type": "object"
+    },
+    "fingerprint": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "schema_version": {
+          "type": "integer",
+          "const": 1
+        },
+        "modality": {
+          "type": "string",
+          "enum": [
+            "tabular",
+            "image",
+            "text",
+            "time_series",
+            "audio",
+            "graph",
+            "other"
+          ]
+        },
+        "task_kind": {
+          "type": "string",
+          "enum": [
+            "classification",
+            "regression",
+            "segmentation",
+            "detection",
+            "seq2seq",
+            "generation",
+            "forecasting",
+            "anomaly_detection",
+            "clustering",
+            "other"
+          ]
+        },
+        "n_samples": {
+          "type": [
+            "integer",
+            "null"
+          ]
+        },
+        "size_class": {
+          "type": "string",
+          "enum": [
+            "small",
+            "medium",
+            "large",
+            "huge"
+          ]
+        },
+        "tabular": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "n_columns": {
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "type_counts": {
+              "type": [
+                "object",
+                "null"
+              ],
+              "additionalProperties": false,
+              "properties": {
+                "numeric": {
+                  "type": [
+                    "integer",
+                    "null"
+                  ]
+                },
+                "categorical": {
+                  "type": [
+                    "integer",
+                    "null"
+                  ]
+                },
+                "datetime": {
+                  "type": [
+                    "integer",
+                    "null"
+                  ]
+                },
+                "text": {
+                  "type": [
+                    "integer",
+                    "null"
+                  ]
+                }
+              }
+            },
+            "target_balance": {
+              "type": [
+                "number",
+                "null"
+              ]
+            },
+            "n_classes": {
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "missing_ratio_max": {
+              "type": [
+                "number",
+                "null"
+              ]
+            },
+            "sampled_rows": {
+              "type": [
+                "integer",
+                "null"
+              ]
+            }
+          }
+        },
+        "image": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "input_shape": {
+              "type": [
+                "array",
+                "null"
+              ],
+              "items": {
+                "type": "integer"
+              }
+            },
+            "n_classes": {
+              "type": [
+                "integer",
+                "null"
+              ]
+            }
+          }
+        },
+        "text": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "avg_token_len": {
+              "type": [
+                "number",
+                "null"
+              ]
+            },
+            "vocab_kind": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "enum": [
+                "english",
+                "korean",
+                "multilingual",
+                "code",
+                "other",
+                null
+              ]
+            }
+          }
+        },
+        "time_series": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "seq_len": {
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "freq": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          }
+        },
+        "audio": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "sample_rate": {
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "avg_duration_sec": {
+              "type": [
+                "number",
+                "null"
+              ]
+            }
+          }
+        },
+        "graph": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "n_nodes": {
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "n_edges": {
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "n_node_features": {
+              "type": [
+                "integer",
+                "null"
+              ]
+            }
+          }
+        },
+        "other": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": true,
+          "properties": {
+            "hint": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "payload": {
+              "type": [
+                "object",
+                "null"
+              ],
+              "additionalProperties": true
+            }
+          }
+        },
+        "domain": {
+          "type": "string",
+          "enum": [
+            "general",
+            "medical",
+            "financial",
+            "regulated",
+            "other"
+          ]
+        },
+        "source": {
+          "type": "string",
+          "enum": [
+            "detected",
+            "detected_sampled",
+            "declared",
+            "merged"
+          ]
+        }
+      },
+      "required": [
+        "schema_version",
+        "modality",
+        "task_kind",
+        "domain",
+        "source"
+      ]
+    },
+    "fingerprint_modality": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "fingerprint_n_samples": {
+      "type": [
+        "integer",
+        "null"
+      ]
+    },
+    "fingerprint_size_class": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "fingerprint_task_kind": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "git_sha": {
+      "type": "string"
+    },
+    "integrity": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "content_hash": {
+          "type": "string"
+        },
+        "hashed_fields": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        }
+      },
+      "required": [
+        "content_hash",
+        "hashed_fields"
+      ]
+    },
+    "integrity_content_hash": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "intent": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "goal": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "enum": [
+            "baseline_reproduction",
+            "sota_challenge",
+            "ablation",
+            "hyperparam_sweep",
+            "exploration",
+            null
+          ]
+        },
+        "expected_baseline": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "metric": {
+              "type": "string"
+            },
+            "value": {
+              "type": "number"
+            }
+          }
+        },
+        "tolerance": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "direction": {
+              "type": "string",
+              "enum": [
+                "higher_is_better",
+                "lower_is_better"
+              ]
+            },
+            "margin": {
+              "type": "number"
+            }
+          }
+        }
+      }
+    },
+    "intent_goal": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "last": {
+      "type": "object"
+    },
+    "last_epoch": {
+      "type": "integer"
+    },
+    "last_value": {
+      "type": "number"
+    },
+    "metrics_declared": {
+      "type": "array"
+    },
+    "mode": {
+      "type": "string"
+    },
+    "name": {
+      "type": "string"
+    },
+    "output_dir": {
+      "type": "string"
+    },
+    "parent_run_id": {
+      "type": "string"
+    },
+    "parent_run_path": {
+      "type": "string"
+    },
+    "partial": {
+      "type": "boolean"
+    },
+    "platform": {
+      "type": "string"
+    },
+    "python": {
+      "type": "string"
+    },
+    "reproducibility_evidence": {
+      "type": "object"
+    },
+    "run_id": {
+      "type": "string"
+    },
+    "schema_version": {
+      "type": "integer"
+    },
+    "status": {
+      "type": "string"
+    },
+    "target_metric": {
+      "type": "string"
+    },
+    "validation_report_path": {
+      "type": "string"
+    },
+    "validation_status": {
+      "type": "string"
+    },
+    "worker_spec": {
+      "type": [
+        "object",
+        "null"
+      ],
+      "additionalProperties": false,
+      "properties": {
+        "schema_version": {
+          "type": "integer",
+          "const": 1
+        },
+        "cpu": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "model": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "cores_physical": {
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "cores_logical": {
+              "type": [
+                "integer",
+                "null"
+              ]
+            },
+            "max_freq_mhz": {
+              "type": [
+                "integer",
+                "null"
+              ]
+            }
+          }
+        },
+        "memory": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "total_gb": {
+              "type": [
+                "number",
+                "null"
+              ]
+            }
+          }
+        },
+        "accelerator": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "type": "string",
+              "enum": [
+                "mps",
+                "cuda",
+                "cpu"
+              ]
+            },
+            "gpus": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "additionalProperties": false,
+                "properties": {
+                  "model": {
+                    "type": "string"
+                  },
+                  "vram_gb": {
+                    "type": [
+                      "number",
+                      "null"
+                    ]
+                  },
+                  "cuda_version": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "torch_ordinal": {
+                    "type": [
+                      "integer",
+                      "null"
+                    ]
+                  }
+                },
+                "required": [
+                  "model"
+                ]
+              }
+            },
+            "visible_devices": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          "required": [
+            "kind",
+            "gpus"
+          ]
+        },
+        "os": {
+          "type": [
+            "object",
+            "null"
+          ],
+          "additionalProperties": false,
+          "properties": {
+            "system": {
+              "type": "string"
+            },
+            "machine": {
+              "type": "string"
+            },
+            "release": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          }
+        },
+        "container": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "kind": {
+              "type": "string",
+              "enum": [
+                "none",
+                "docker",
+                "k8s",
+                "other"
+              ]
+            },
+            "image": {
+              "type": [
+                "string",
+                "null"
+              ]
+            },
+            "detector_hint": {
+              "type": [
+                "string",
+                "null"
+              ]
+            }
+          },
+          "required": [
+            "kind"
+          ]
+        },
+        "source": {
+          "type": "string",
+          "enum": [
+            "detected",
+            "declared",
+            "merged"
+          ]
+        }
+      },
+      "required": [
+        "schema_version",
+        "accelerator",
+        "container",
+        "source"
+      ]
+    },
+    "worker_spec_accelerator_kind": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "worker_spec_cpu_model": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "worker_spec_gpu_model_0": {
+      "type": [
+        "string",
+        "null"
+      ]
+    },
+    "worker_spec_memory_gb": {
+      "type": [
+        "number",
+        "null"
+      ]
+    }
+  },
+  "x-pcq-schema-version": 1,
+  "x-pcq-additive-only": true
+}
