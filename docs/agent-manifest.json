@@ -20,7 +20,7 @@
     "site": "https://playidea-lab.github.io/TC/",
     "repository": "https://github.com/playidea-lab/TC",
     "readme": "https://github.com/playidea-lab/TC/blob/main/README.md",
-    "pcq_contract": "https://playidea-lab.github.io/TC/pcq-2.x.md",
+    "pcq_2x_proposal": "https://playidea-lab.github.io/TC/pcq-2.x.md (NOT canonical — canonical pcq 2.x defined by pcq spec/, vendored by TC)",
     "llms_txt": "https://playidea-lab.github.io/TC/llms.txt"
   },
   "core_principles": [

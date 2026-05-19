@@ -200,8 +200,9 @@
           <article class="feature">
             <h3>pcq — Format</h3>
             <p>
-              ML 실험 evidence의 Apache-2.0 contract. pcq 2.x: intent 3필드
-              + data fingerprint + synthetic 표식. <em>the book.</em>
+              ML 실험 evidence의 Apache-2.0 형식 (1.x released).
+              pcq 2.x(intent 3필드·fingerprint·synthetic)는 TC측 <em>제안</em>
+              — 정본은 pcq spec/. <em>the book.</em>
             </p>
           </article>
           <article class="feature">
@@ -265,7 +266,7 @@
               <tr><th>Milestone</th><th>범위</th><th>상태</th></tr>
             </thead>
             <tbody>
-              <tr><th>M0 Foundation</th><td>repo · DB schema · LLM wrapper · JWT · pcq 2.x spec</td><td>완료</td></tr>
+              <tr><th>M0 Foundation</th><td>repo · DB schema · LLM wrapper · JWT · pcq 2.x 제안(정본 pcq spec/ 대기)</td><td>완료</td></tr>
               <tr><th>M1 Ingestion + Library</th><td>PHI 차단 · attribution · L1 immutable · content hash</td><td>완료</td></tr>
               <tr><th>M2 Match-maker</th><td>자연어 직렬화 · pgvector retrieve · Gemini listwise rerank</td><td>완료</td></tr>
               <tr><th>M3 Retirement + Reciprocity</th><td>synthetic auto-retire · 3-event 측정 · verdict</td><td>완료</td></tr>
@@ -308,7 +309,7 @@
             evidence 모델: <strong>L1 immutable</strong> · <strong>L2 append-only</strong> ·
             <strong>L3 mutable visibility</strong>. PHI는 ingestion에서 자동 차단,
             verifier는 read-time JOIN으로 server-derived (record에 저장 안 함).
-            <a href="pcq-2.x.md">pcq 2.x 입력 계약 →</a>
+            <a href="pcq-2.x.md">pcq 2.x 입력 형식 제안 (정본 아님) →</a>
           </p>
         </div>
       </section>

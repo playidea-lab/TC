@@ -521,7 +521,7 @@ built it.
 
 | Component | State |
 |---|---|
-| Format (`pcq`) | Released — `uv add pcq` (1.x); pcq 2.x contract draft in [`docs/pcq-2.x.md`](docs/pcq-2.x.md) |
+| Format (`pcq`) | Released — `uv add pcq` (1.x). pcq 2.x is a TC-side **proposal** ([`docs/pcq-2.x.md`](docs/pcq-2.x.md)), **not canonical** — canonical 2.x is defined by pcq `spec/` and vendored by TC (unresolved: `content_hash` vs v4.4 `attribution` key collision). |
 | Press (`cq`) | Operating — PI Lab managed |
 | **Library (`The Commons`)** | **v0.1 in development — backend scaffolding complete, 184 tests passing** |
 
@@ -664,8 +664,11 @@ belong in design and planning documents that follow once the vision settles.
 Concrete questions still open:
 - Exact mileage/attribution terms (earn/spend, attribution scope) — no
   contributor data license; the corpus is a PI Lab asset.
-- **pcq 2.x specification** — data fingerprint fields, intent format, PHI
-  exclusion rules at the format level.
+- **Canonical pcq 2.x** — defined in pcq `spec/` (not TC). Includes
+  resolving the integrity-hash key collision (`content_hash` must move out
+  of `attribution`, which v4.4 uses for actor identity). TC vendors it;
+  cq M4 (2.x emission) follows that unification. TC's Evidence/content_hash
+  code is frozen until then (no unilateral redefinition).
 - Ingestion surface — public API shape, validation pipeline, federation.
 - **Mileage algorithm** — earn/spend weights, time decay curve, gaming
   prevention (duplicate detection, persona reputation coupling).

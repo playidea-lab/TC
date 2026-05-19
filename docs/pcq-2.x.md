@@ -1,8 +1,16 @@
-# pcq 2.x — Input Contract for The Commons v0.1
+# pcq 2.x — Input Format **Proposal** for The Commons v0.1
 
-> 이 문서는 **TC가 받아들이는 evidence 형식**을 명시한다. pcq 자체의 정식 release는
-> 별 repo(cq_ml/pcq)에서 진행되며, 여기 명시된 schema는 TC v0.1 ingestion이 의존하는
-> *현재 합의된* 표면이다.
+> ⚠️ **정본 아님 (2026-05-19).** 이 문서는 TC가 *제안하는* 입력 형식이며
+> **계약/정본이 아니다**. pcq 2.x **정본은 pcq repo의 `spec/`가 정의**하고
+> TC는 그것을 **vendoring**한다. 이 제안과 정본이 갈리면 정본이 우선한다.
+>
+> **미해결 known issue — `content_hash` 키 충돌:** 본 제안은 무결성 해시를
+> `attribution.content_hash`에 두는데, 이는 **pcq v4.4의 `attribution`
+> (= 행위자: operator/author/committer)과 키 의미 충돌**이다. 무결성 해시는
+> `attribution` 밑이 아니라 **별도 top-level 필드**로 분리되어야 한다.
+> 최종 위치·이름은 pcq `spec/` 단일화의 산출물이며 TC는 그때 vendoring한다.
+> 그 전까지 TC의 Evidence 모델·content_hash 코드는 *동결*(단독 재정의 금지).
+> cq M4(2.x emission)는 이 단일화 *이후*다.
 
 ## 왜 2.x인가
 
