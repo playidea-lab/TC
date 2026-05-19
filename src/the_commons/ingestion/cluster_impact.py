@@ -14,19 +14,27 @@ DEFAULT_TOLERANCE_MARGIN = 0.05
 MatchOutcome = Literal["promote", "contradicts", "indeterminate"]
 
 
+def _pcq(record: dict[str, Any]) -> dict[str, Any]:
+    """envelope record → pcq_record dict (envelope 미사용 시 record 자체)."""
+    inner = record.get("pcq_record")
+    return inner if isinstance(inner, dict) else record
+
+
 def evaluate_synthetic_match(
     real_record: dict[str, Any],
     synthetic_record: dict[str, Any],
 ) -> MatchOutcome:
     """real evidence가 synthetic의 expected_baseline을 검증한 결과.
 
-    반환:
+    envelope 또는 raw pcq_record 둘 다 수용. 반환:
         promote — real metric이 synthetic 예측과 tolerance 내 일치
         contradicts — tolerance 밖 차이
         indeterminate — metric 이름 다름·tolerance 없고 baseline 없음 등
     """
-    real_metrics = real_record.get("metrics") or {}
-    synth_intent = synthetic_record.get("intent") or {}
+    real_pcq = _pcq(real_record)
+    synth_pcq = _pcq(synthetic_record)
+    real_metrics = real_pcq.get("metrics") or {}
+    synth_intent = synth_pcq.get("intent") or {}
     expected = synth_intent.get("expected_baseline") or {}
 
     metric_name = expected.get("metric")
@@ -57,8 +65,9 @@ def compute_problem_cluster_bucket(record: dict[str, Any]) -> str:
 
     형식: `<modality>-<intent_goal>-<sample_count_band>`
     """
-    fingerprint = record.get("data_fingerprint") or {}
-    intent = record.get("intent") or {}
+    pcq = _pcq(record)
+    fingerprint = pcq.get("data_fingerprint") or {}
+    intent = pcq.get("intent") or {}
 
     modality = fingerprint.get("modality") or "unknown"
     band = fingerprint.get("sample_count_band") or "unknown"

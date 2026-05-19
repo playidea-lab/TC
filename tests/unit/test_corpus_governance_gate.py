@@ -17,7 +17,7 @@ from the_commons.corpus.export import (
     export_corpus,
     import_corpus,
 )
-from the_commons.library.content_hash import compute_content_hash
+from the_commons.library.content_hash import compute_integrity
 from the_commons.library.models import Evidence
 from the_commons.library.store import InMemoryEvidenceStore
 
@@ -34,20 +34,21 @@ def _ev(
         "evidence_id": eid,
         "tier": tier,
         "outreach_origin": "external",
-        "intent": {"goal": goal, "expected_baseline": None, "tolerance": None},
-        "data_fingerprint": {"modality": "tabular", "sample_count_band": "10k-100k"},
-        "config": {"recipe_id": recipe},
-        "metrics": {"AUC": auc},
-        "worker_spec": {"cpu_cores": 8, "ram_gb": 16},
-        "attribution": {
-            "contributor_id": None,
-            "content_hash": "",
-            "created_at": datetime.now(UTC).isoformat(),
-            "pcq_version": "2.0.0",
-        },
         "synthetic_source": None,
+        "pcq_record": {
+            "intent": {"goal": goal, "expected_baseline": None, "tolerance": None},
+            "data_fingerprint": {"modality": "tabular", "sample_count_band": "10k-100k"},
+            "config": {"recipe_id": recipe},
+            "metrics": {"AUC": auc},
+            "worker_spec": {"cpu_cores": 8, "ram_gb": 16},
+            "attribution": {"operator": None},
+            "contract_version": "2.0",
+        },
     }
-    rec["attribution"]["content_hash"] = compute_content_hash(rec)
+    ev = Evidence.model_validate(rec)
+    pcq_norm = ev.pcq_record.model_dump(mode="json")
+    pcq_norm["integrity"] = compute_integrity(pcq_norm)
+    rec["pcq_record"] = pcq_norm
     return Evidence.model_validate(rec)
 
 
@@ -98,38 +99,45 @@ async def test_governance_gate_blocks_tampered_corpus() -> None:
         await import_corpus(fresh, [tampered])
 
 
-async def test_l1_identity_is_content_not_storage() -> None:
-    """DD1 — content_hash는 record 내용으로 결정, 저장 위치/인스턴스 무관."""
-    ev = _ev("same-id", recipe="rf", auc=0.77)
-    da = ev.model_dump(mode="json")
+async def test_l1_identity_is_pcq_record_independent_of_envelope() -> None:
+    """DD1 (R10 정합): pcq integrity는 pcq_record 내용으로만 결정.
 
-    # 동일 레코드를 *서로 다른 store 인스턴스*에 넣어도 hash 불변
-    # (정체성은 내용이지 저장 위치/row가 아니다 — 운영자 독립의 핵심)
+    envelope 필드(evidence_id/tier/outreach_origin)는 hash 입력 아님 —
+    동일 pcq_record는 envelope이 달라도 같은 content_hash.
+    """
+    ev = _ev("same-id", recipe="rf", auc=0.77)
+    pcq_a = ev.pcq_record.model_dump(mode="json")
+
+    # 동일 pcq_record를 서로 다른 store 인스턴스에 넣어도 integrity 불변
     s1, s2 = InMemoryEvidenceStore(), InMemoryEvidenceStore()
     await s1.insert(ev)
     await s2.insert(ev)
     g1 = (await s1.list_evidence(deprecated=None, limit=10))[0][0]
     g2 = (await s2.list_evidence(deprecated=None, limit=10))[0][0]
-    assert compute_content_hash(g1.model_dump(mode="json")) == compute_content_hash(
-        g2.model_dump(mode="json")
+    assert g1.pcq_record.integrity.content_hash == g2.pcq_record.integrity.content_hash
+
+    # pcq_record 내용 한 필드만 바뀌면 hash 변경
+    changed = dict(pcq_a)
+    changed["metrics"] = {"AUC": 0.78}
+    assert (
+        compute_integrity(pcq_a)["content_hash"]
+        != compute_integrity(changed)["content_hash"]
     )
 
-    # 한 필드만 바뀌면 hash 변경
-    changed = dict(da)
-    changed["metrics"] = {"AUC": 0.78}
-    assert compute_content_hash(da) != compute_content_hash(changed)
-
-    # evidence_id도 L1 내용의 일부 — 바뀌면 hash 변경 (DoD의 "id 무관 hash
-    # 동일"은 부정확: 정체성은 내용이며 evidence_id는 그 내용에 포함된다)
-    relabeled = dict(da)
-    relabeled["evidence_id"] = "other-id"
-    assert compute_content_hash(da) != compute_content_hash(relabeled)
+    # evidence_id는 envelope 필드 → pcq integrity와 무관(R10)
+    pcq_b = dict(pcq_a)  # envelope 변경 안 함 — pcq 같으면 hash 같음
+    assert (
+        compute_integrity(pcq_a)["content_hash"]
+        == compute_integrity(pcq_b)["content_hash"]
+    )
 
 
-def test_attribution_content_hash_excluded_from_hash_input() -> None:
-    """chicken-egg — attribution.content_hash 자체는 hash 입력서 제외."""
-    base = _ev("h-1", auc=0.8).model_dump(mode="json")
-    h1 = compute_content_hash(base)
-    base["attribution"]["content_hash"] = "sha256:deadbeef"  # 임의 변경
-    h2 = compute_content_hash(base)
-    assert h1 == h2  # content_hash 필드 변경은 hash에 영향 없음
+def test_signature_excluded_from_integrity_input() -> None:
+    """anti-recursion — attribution.signature·integrity 자체는 hash 입력 제외."""
+    pcq = _ev("h-1", auc=0.8).pcq_record.model_dump(mode="json")
+    h1 = compute_integrity(pcq)["content_hash"]
+    # signature·integrity 필드 변경은 hash에 영향 없음
+    pcq.setdefault("attribution", {})["signature"] = "phase-2-stub"
+    pcq["integrity"] = {"content_hash": "sha256:deadbeef", "hashed_fields": []}
+    h2 = compute_integrity(pcq)["content_hash"]
+    assert h1 == h2

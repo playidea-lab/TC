@@ -20,10 +20,7 @@ from collections.abc import AsyncIterator
 
 import structlog
 
-from the_commons.library.content_hash import (
-    compute_content_hash,
-    verify_content_hash,
-)
+from the_commons.library.content_hash import compute_integrity, verify_integrity
 from the_commons.library.models import Evidence
 from the_commons.library.store import (
     EvidenceAlreadyExistsError,
@@ -40,17 +37,18 @@ class CorpusIntegrityError(RuntimeError):
 
 
 def _canonical_record(evidence: Evidence) -> dict:
-    """corpus의 canonical L1 형태.
+    """corpus의 canonical envelope 형태 (pcq 2.x 정본).
 
-    Pydantic model_dump은 sparse 입력을 정규화(기본필드 채움)하므로 원
-    ingestion dict를 사후 재현할 수 없다. 따라서 corpus는 *정규화된
-    model_dump 형태*를 정전으로 삼고, 그 형태 위에서 content_hash를
-    재스탬프한다 — dump가 자기일관·변조탐지 가능하며 누구나 재현 가능.
-    (ingestion/content_hash 의미는 불변 — blast radius 회피.)
+    envelope을 model_dump하고, pcq_record 위에 정본 byte-parity hash를
+    재스탬프해 pcq_record.integrity에 둔다 — dump가 자기일관·변조탐지·
+    운영자독립 재현 가능. (ingestion이 부착한 integrity가 그대로 보존되는
+    happy path도 동일 결과.)
     """
     record = evidence.model_dump(mode="json")
-    record.setdefault("attribution", {})
-    record["attribution"]["content_hash"] = compute_content_hash(record)
+    pcq = record.get("pcq_record")
+    if isinstance(pcq, dict):
+        pcq["integrity"] = compute_integrity(pcq)
+        record["pcq_record"] = pcq
     return record
 
 
@@ -91,7 +89,10 @@ async def import_corpus(store: EvidenceStore, lines: list[str]) -> int:
         if not raw:
             continue
         record = json.loads(raw)
-        if not verify_content_hash(record):
+        pcq = record.get("pcq_record") or {}
+        integrity = pcq.get("integrity") or {}
+        declared = integrity.get("content_hash") if isinstance(integrity, dict) else None
+        if not declared or not verify_integrity(pcq, declared):
             raise CorpusIntegrityError(
                 f"content_hash 불일치 — L1 변조 의심: "
                 f"evidence_id={record.get('evidence_id')}"

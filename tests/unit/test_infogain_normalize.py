@@ -2,7 +2,6 @@
 
 from datetime import UTC, datetime
 
-from the_commons.library.content_hash import compute_content_hash
 from the_commons.library.models import Evidence
 from the_commons.matchmaker.infogain.normalize import normalize_neighborhood
 
@@ -20,27 +19,24 @@ def _evidence(
         "evidence_id": eid,
         "tier": "real",
         "outreach_origin": "external",
-        "intent": {
-            "goal": "exploration",
-            "expected_baseline": expected_baseline,
-            "tolerance": tolerance,
-        },
-        "data_fingerprint": {
-            "modality": "tabular",
-            "sample_count_band": "10k-100k",
-        },
-        "config": {"recipe_id": "r"},
-        "metrics": metrics,
-        "worker_spec": {"cpu_cores": 8, "ram_gb": 16},
-        "attribution": {
-            "contributor_id": None,
-            "content_hash": "",
-            "created_at": datetime.now(UTC).isoformat(),
-            "pcq_version": "2.0.0",
-        },
         "synthetic_source": None,
+        "pcq_record": {
+            "intent": {
+                "goal": "exploration",
+                "expected_baseline": expected_baseline,
+                "tolerance": tolerance,
+            },
+            "data_fingerprint": {
+                "modality": "tabular",
+                "sample_count_band": "10k-100k",
+            },
+            "config": {"recipe_id": "r"},
+            "metrics": metrics,
+            "worker_spec": {"cpu_cores": 8, "ram_gb": 16},
+            "attribution": {"operator": None},
+            "contract_version": "2.0",
+        },
     }
-    rec["attribution"]["content_hash"] = compute_content_hash(rec)
     return Evidence.model_validate(rec)
 
 

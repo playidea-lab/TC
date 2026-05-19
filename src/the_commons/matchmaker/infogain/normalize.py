@@ -28,14 +28,16 @@ _LOWER_IS_BETTER = "lower_is_better"
 
 def _raw_target_value(evidence: Evidence) -> float | None:
     """evidence의 target metric raw 값. 없으면 None (정규화에서 제외)."""
+    pcq = evidence.pcq_record
     # intent.expected_baseline.metric 우선 (선언된 target)
-    baseline = evidence.intent.expected_baseline
-    if isinstance(baseline, dict):
-        name = baseline.get("metric")
-        if isinstance(name, str):
-            value = evidence.metrics.get(name)
-            if isinstance(value, int | float) and not isinstance(value, bool):
-                return float(value)
+    if pcq.intent is not None:
+        baseline = pcq.intent.expected_baseline
+        if isinstance(baseline, dict):
+            name = baseline.get("metric")
+            if isinstance(name, str):
+                value = pcq.metrics.get(name)
+                if isinstance(value, int | float) and not isinstance(value, bool):
+                    return float(value)
     # fallback: composer와 동일한 첫 numeric metric 규칙
     primary = _extract_primary_metric(evidence)
     if primary is not None:
@@ -45,11 +47,13 @@ def _raw_target_value(evidence: Evidence) -> float | None:
 
 def _direction(evidence: Evidence) -> str:
     """intent.tolerance['direction']. 미지정 시 higher_is_better."""
-    tolerance = evidence.intent.tolerance
-    if isinstance(tolerance, dict):
-        direction = tolerance.get("direction")
-        if isinstance(direction, str) and direction:
-            return direction
+    intent = evidence.pcq_record.intent
+    if intent is not None:
+        tolerance = intent.tolerance
+        if isinstance(tolerance, dict):
+            direction = tolerance.get("direction")
+            if isinstance(direction, str) and direction:
+                return direction
     return "higher_is_better"
 
 

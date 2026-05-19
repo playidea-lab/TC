@@ -32,12 +32,15 @@ def serialize_query(query: QueryFeatures) -> str:
 
 
 def serialize_evidence(evidence: Evidence) -> str:
-    """Evidence → 자연어 description (검색·rerank용)."""
-    modality = evidence.data_fingerprint.modality
-    band = evidence.data_fingerprint.sample_count_band
-    recipe = _recipe_phrase(evidence.config)
-    metric = _metric_phrase(evidence.metrics)
-    intent_phrase = _goal_phrase(evidence.intent.goal)
+    """Evidence(envelope) → 자연어 description (검색·rerank용)."""
+    pcq = evidence.pcq_record
+    fp = pcq.data_fingerprint
+    modality = fp.modality if fp else "unknown"
+    band = fp.sample_count_band if fp else "unknown"
+    recipe = _recipe_phrase(pcq.config)
+    metric = _metric_phrase(pcq.metrics)
+    goal = pcq.intent.goal if pcq.intent else None
+    intent_phrase = _goal_phrase(goal) if goal else "no declared goal"
     tier_phrase = "real" if evidence.tier == "real" else "synthetic (LLM-distilled)"
 
     return (
@@ -59,7 +62,9 @@ _GOAL_PHRASES: dict[str, str] = {
 }
 
 
-def _goal_phrase(goal: str) -> str:
+def _goal_phrase(goal: str | None) -> str:
+    if goal is None:
+        return "no declared goal"
     return _GOAL_PHRASES.get(goal, goal)
 
 

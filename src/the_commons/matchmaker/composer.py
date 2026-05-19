@@ -92,9 +92,9 @@ def compose_candidates(
 
 
 def _extract_recipe_id(evidence: Evidence) -> str:
-    """config에서 recipe identifier 추출 (serializer와 같은 규칙)."""
+    """pcq_record.config에서 recipe identifier 추출 (serializer와 같은 규칙)."""
     for key in ("recipe_id", "recipe", "model_family", "framework", "model"):
-        value = evidence.config.get(key)
+        value = evidence.pcq_record.config.get(key)
         if isinstance(value, str) and value:
             return value
     return "experiment"
@@ -102,7 +102,7 @@ def _extract_recipe_id(evidence: Evidence) -> str:
 
 def _extract_primary_metric(evidence: Evidence) -> dict[str, float] | None:
     """첫 numeric metric을 {"name": ..., "value": ...}로."""
-    for name, value in evidence.metrics.items():
+    for name, value in evidence.pcq_record.metrics.items():
         if isinstance(value, int | float):
             return {"name": name, "value": float(value)}
     return None

@@ -104,16 +104,17 @@ class InMemoryEvidenceStore:
         self._deprecated: set[str] = set()
 
     async def insert(self, evidence: Evidence) -> None:
+        # evidence_id가 유일성 키. content_hash는 무결성 증명일 뿐 — pcq 2.x
+        # integrity는 envelope 필드(evidence_id 포함)를 제외하므로 동일 content
+        # 의 서로 다른 evidence 기록은 동일 hash가 합법 (중복 detection 아님).
         if evidence.evidence_id in self._by_id:
             raise EvidenceAlreadyExistsError(
                 f"evidence_id 중복: {evidence.evidence_id}"
             )
-        if evidence.attribution.content_hash in self._hashes:
-            raise EvidenceAlreadyExistsError(
-                f"content_hash 중복: {evidence.attribution.content_hash}"
-            )
         self._by_id[evidence.evidence_id] = evidence
-        self._hashes.add(evidence.attribution.content_hash)
+        ch = _content_hash_of(evidence)
+        if ch is not None:
+            self._hashes.add(ch)
 
     async def get_by_id(self, evidence_id: str) -> Evidence | None:
         return self._by_id.get(evidence_id)
@@ -137,9 +138,9 @@ class InMemoryEvidenceStore:
             for ev in self._by_id.values()
             if ev.tier == "synthetic"
             and ev.evidence_id not in self._deprecated
-            and ev.data_fingerprint.modality == modality
-            and ev.data_fingerprint.sample_count_band == sample_count_band
-            and ev.intent.goal == intent_goal
+            and _fp_modality(ev) == modality
+            and _fp_band(ev) == sample_count_band
+            and _intent_goal(ev) == intent_goal
         ]
 
     async def count_real_in_bucket(
@@ -153,9 +154,9 @@ class InMemoryEvidenceStore:
             1
             for ev in self._by_id.values()
             if ev.tier == "real"
-            and ev.data_fingerprint.modality == modality
-            and ev.data_fingerprint.sample_count_band == sample_count_band
-            and ev.intent.goal == intent_goal
+            and _fp_modality(ev) == modality
+            and _fp_band(ev) == sample_count_band
+            and _intent_goal(ev) == intent_goal
         )
 
     async def mark_deprecated(self, evidence_id: str, *, reason: str) -> None:
@@ -179,19 +180,16 @@ class InMemoryEvidenceStore:
         def _matches(ev: Evidence) -> bool:
             if tier is not None and ev.tier != tier:
                 return False
-            if modality is not None and ev.data_fingerprint.modality != modality:
+            if modality is not None and _fp_modality(ev) != modality:
                 return False
             if (
                 sample_count_band is not None
-                and ev.data_fingerprint.sample_count_band != sample_count_band
+                and _fp_band(ev) != sample_count_band
             ):
                 return False
-            if intent_goal is not None and ev.intent.goal != intent_goal:
+            if intent_goal is not None and _intent_goal(ev) != intent_goal:
                 return False
-            if (
-                contributor_id is not None
-                and ev.attribution.contributor_id != contributor_id
-            ):
+            if contributor_id is not None and _operator(ev) != contributor_id:
                 return False
             is_deprecated = ev.evidence_id in self._deprecated
             return not (deprecated is not None and is_deprecated != deprecated)
@@ -410,8 +408,13 @@ def _row_to_evidence(run_record_json: Any) -> Evidence:
 
 
 def _evidence_to_db_params(evidence: Evidence) -> dict[str, Any]:
-    """Pydantic Evidence → DB INSERT 파라미터 dict."""
-    metrics = evidence.metrics
+    """Pydantic Evidence(envelope) → DB INSERT 파라미터 dict.
+
+    pcq_record가 sparse(1.x compat)면 컬럼 일부는 NULL. content_hash는
+    ingestion이 server-derive로 채워두므로 여기선 그대로 추출.
+    """
+    pcq = evidence.pcq_record
+    metrics = pcq.metrics
     primary_name, primary_value = _select_primary_metric(metrics)
 
     synthetic_json = (
@@ -425,14 +428,14 @@ def _evidence_to_db_params(evidence: Evidence) -> dict[str, Any]:
         "tier": evidence.tier,
         "outreach_origin": evidence.outreach_origin,
         "run_record": json.dumps(evidence.model_dump(mode="json")),
-        "modality": evidence.data_fingerprint.modality,
-        "sample_count_band": evidence.data_fingerprint.sample_count_band,
-        "intent_goal": evidence.intent.goal,
+        "modality": _fp_modality(evidence),
+        "sample_count_band": _fp_band(evidence),
+        "intent_goal": _intent_goal(evidence),
         "primary_metric_name": primary_name,
         "primary_metric_value": primary_value,
-        "contributor_id": evidence.attribution.contributor_id,
-        "content_hash": evidence.attribution.content_hash,
-        "created_at": evidence.attribution.created_at,
+        "contributor_id": _operator(evidence),
+        "content_hash": _content_hash_of(evidence),
+        "created_at": _created_at(evidence),
         "synthetic_source": json.dumps(synthetic_json) if synthetic_json else None,
         "template_ver": "v1",
     }
@@ -444,3 +447,46 @@ def _select_primary_metric(metrics: dict[str, Any]) -> tuple[str | None, float |
         if isinstance(value, int | float):
             return name, float(value)
     return None, None
+
+
+# ----------------------------------------------------------------------------
+# envelope 접근 헬퍼 — pcq_record sparse(1.x) None-safe
+# ----------------------------------------------------------------------------
+
+
+def _fp_modality(ev: Evidence) -> str | None:
+    return ev.pcq_record.data_fingerprint.modality if ev.pcq_record.data_fingerprint else None
+
+
+def _fp_band(ev: Evidence) -> str | None:
+    return (
+        ev.pcq_record.data_fingerprint.sample_count_band
+        if ev.pcq_record.data_fingerprint
+        else None
+    )
+
+
+def _intent_goal(ev: Evidence) -> str | None:
+    return ev.pcq_record.intent.goal if ev.pcq_record.intent else None
+
+
+def _operator(ev: Evidence) -> str | None:
+    """R12: TC contributor_id ↔ pcq attribution.operator."""
+    return ev.pcq_record.attribution.operator if ev.pcq_record.attribution else None
+
+
+def _content_hash_of(ev: Evidence) -> str | None:
+    """integrity.content_hash. 1.x record엔 부재 가능 — ingestion이 server-derive."""
+    return ev.pcq_record.integrity.content_hash if ev.pcq_record.integrity else None
+
+
+def _created_at(ev: Evidence) -> Any:
+    """R12: run_record timestamp(last_updated_at 등) 재사용. 부재면 server now."""
+    rec = ev.pcq_record.model_dump(mode="json")
+    for key in ("last_updated_at", "completed_at", "created_at", "started_at"):
+        v = rec.get(key)
+        if v:
+            return v
+    from datetime import UTC, datetime
+
+    return datetime.now(UTC)

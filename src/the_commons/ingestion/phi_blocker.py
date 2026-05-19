@@ -96,19 +96,27 @@ def _scan_disallowed(node: Any, *, path: str, violations: list[str]) -> None:
 
 
 def _quantize_sample_count_inplace(record: dict[str, Any]) -> dict[str, Any]:
-    """data_fingerprint 안에서 정확 sample count를 대역으로 자동 변환."""
+    """envelope 형태에서 pcq_record.data_fingerprint 정확 sample_count 대역 변환."""
     cloned = _deep_copy_shallow(record)
-    fingerprint = cloned.get("data_fingerprint")
-    if not isinstance(fingerprint, dict):
-        return cloned
 
-    # contributor가 'sample_count'에 정확한 N을 넣은 경우 silent quantize
+    # envelope: pcq_record 안의 data_fingerprint를 스코프 (R9).
+    pcq = cloned.get("pcq_record")
+    if not isinstance(pcq, dict):
+        return cloned
+    pcq = dict(pcq)  # shallow clone
+    fingerprint = pcq.get("data_fingerprint")
+    if not isinstance(fingerprint, dict):
+        cloned["pcq_record"] = pcq
+        return cloned
+    fingerprint = dict(fingerprint)
+
     exact = fingerprint.get("sample_count")
     if isinstance(exact, int):
         fingerprint["sample_count_band"] = quantize_sample_count(exact)
         fingerprint.pop("sample_count", None)
 
-    cloned["data_fingerprint"] = fingerprint
+    pcq["data_fingerprint"] = fingerprint
+    cloned["pcq_record"] = pcq
     return cloned
 
 

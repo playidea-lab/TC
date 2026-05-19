@@ -1,44 +1,46 @@
-"""attribution 검증.
+"""attribution / integrity 검증 — envelope 정본 (R9/R12 정합).
 
-ingestion 시점에 record가:
-- synthetic tier면 synthetic_source 필수
-- attribution.content_hash가 실제 record hash와 일치
-- pcq_version이 지원 범위(2.x)
-- evidence_id가 일정 패턴
+ingestion 시점에 envelope record가:
+- evidence_id 패턴
+- synthetic tier ↔ synthetic_source 일관성
+- pcq_record.contract_version이 지원 범위 (또는 부재 → "1.x", R6 additive)
+- pcq_record.integrity.content_hash가 재계산과 일치 (integrity 부재면
+  ingestion 상류가 server-derive 후 검증 — 부재는 더 이상 valid가 아님)
 """
 
 import re
 from typing import Any
 
-from the_commons.library.content_hash import compute_content_hash
+from the_commons.library.content_hash import compute_integrity, verify_integrity
 
-SUPPORTED_PCQ_MAJOR = 2
+SUPPORTED_CONTRACT_VERSIONS: frozenset[str] = frozenset({"2.0", "1.x"})
 EVIDENCE_ID_PREFIX = "ev-"
-# E.1 — /evidence/{id} GET path pattern과 일치. 둘이 같은 spec.
 EVIDENCE_ID_PATTERN = re.compile(r"^ev-[A-Za-z0-9_-]+$")
 EVIDENCE_ID_MIN_LENGTH = 4
 EVIDENCE_ID_MAX_LENGTH = 128
 
 
 class AttributionError(ValueError):
-    """attribution 검증 실패. ingestion이 거부할 record."""
+    """attribution/integrity 검증 실패 — ingestion이 거부할 record."""
 
 
 def validate_attribution(record: dict[str, Any]) -> None:
-    """검증 통과면 None, 실패면 AttributionError.
+    """envelope record 검증. 통과면 None, 실패면 AttributionError.
 
-    DB 저장 전 ingestion 파이프라인이 마지막 게이트로 호출한다.
+    pcq_record가 envelope의 첫째 시민(R9). 모든 pcq 2.x 필드는 그 안에서.
     """
     _require_evidence_id(record)
-    _require_tier_attribution_consistency(record)
-    _require_pcq_version(record)
-    _require_content_hash_match(record)
+    _require_tier_synthetic_consistency(record)
+    _require_contract_version(record)
+    _require_integrity_hash_match(record)
 
 
 def _require_evidence_id(record: dict[str, Any]) -> None:
     eid = record.get("evidence_id")
     if not isinstance(eid, str):
-        raise AttributionError(f"evidence_id 필요 (받은 타입: {type(eid).__name__})")
+        raise AttributionError(
+            f"evidence_id 필요 (받은 타입: {type(eid).__name__})"
+        )
     if not (EVIDENCE_ID_MIN_LENGTH <= len(eid) <= EVIDENCE_ID_MAX_LENGTH):
         raise AttributionError(
             f"evidence_id 길이 {EVIDENCE_ID_MIN_LENGTH}-{EVIDENCE_ID_MAX_LENGTH} "
@@ -51,16 +53,14 @@ def _require_evidence_id(record: dict[str, Any]) -> None:
         )
 
 
-def _require_tier_attribution_consistency(record: dict[str, Any]) -> None:
-    """synthetic tier는 synthetic_source 필수, real tier는 None이어야."""
+def _require_tier_synthetic_consistency(record: dict[str, Any]) -> None:
+    """synthetic tier는 synthetic_source 필수, real tier는 None이어야 (R10)."""
     tier = record.get("tier")
     src = record.get("synthetic_source")
 
     if tier == "synthetic":
         if not isinstance(src, dict):
-            raise AttributionError(
-                "tier='synthetic' 인데 synthetic_source 누락"
-            )
+            raise AttributionError("tier='synthetic' 인데 synthetic_source 누락")
         for field in ("source_model", "prompt_hash", "generated_at"):
             if not src.get(field):
                 raise AttributionError(f"synthetic_source.{field} 누락")
@@ -73,26 +73,33 @@ def _require_tier_attribution_consistency(record: dict[str, Any]) -> None:
         raise AttributionError(f"unknown tier: {tier!r}")
 
 
-def _require_pcq_version(record: dict[str, Any]) -> None:
-    attribution = record.get("attribution", {})
-    version = attribution.get("pcq_version", "")
-    if not isinstance(version, str) or not version:
-        raise AttributionError("attribution.pcq_version 누락")
-    major_str = version.split(".", 1)[0]
-    if not major_str.isdigit() or int(major_str) != SUPPORTED_PCQ_MAJOR:
+def _require_contract_version(record: dict[str, Any]) -> None:
+    """contract_version 부재 = 1.x (R6 additive). 그 외 모르는 버전이면 거부."""
+    pcq = record.get("pcq_record") or {}
+    version = pcq.get("contract_version")
+    if version is None:
+        return  # R6: 부재 = 1.x, valid
+    if not isinstance(version, str) or version not in SUPPORTED_CONTRACT_VERSIONS:
         raise AttributionError(
-            f"지원하지 않는 pcq 버전: {version} (필요: {SUPPORTED_PCQ_MAJOR}.x)"
+            f"지원하지 않는 contract_version: {version!r} "
+            f"(허용: {sorted(SUPPORTED_CONTRACT_VERSIONS)})"
         )
 
 
-def _require_content_hash_match(record: dict[str, Any]) -> None:
-    """attribution.content_hash가 record로부터 재계산한 hash와 일치해야."""
-    attribution = record.get("attribution", {})
-    declared = attribution.get("content_hash")
+def _require_integrity_hash_match(record: dict[str, Any]) -> None:
+    """pcq_record.integrity.content_hash가 재계산과 byte-parity 일치해야.
+
+    1.x record는 integrity 부재 — ingestion 상류(`ensure_integrity`)가
+    server-derive로 부착한 뒤 이 검증이 돈다. 그러므로 이 시점엔 integrity가
+    있어야 한다 (없으면 상류 누락 — 거부).
+    """
+    pcq = record.get("pcq_record") or {}
+    integrity = pcq.get("integrity") or {}
+    declared = integrity.get("content_hash")
     if not declared:
-        raise AttributionError("attribution.content_hash 누락")
-    actual = compute_content_hash(record)
-    if declared != actual:
+        raise AttributionError("pcq_record.integrity.content_hash 누락")
+    if not verify_integrity(pcq, declared):
+        actual = compute_integrity(pcq)["content_hash"]
         raise AttributionError(
             f"content_hash 불일치 — declared={declared}, computed={actual}"
         )

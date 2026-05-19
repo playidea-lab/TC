@@ -9,7 +9,7 @@ from the_commons.corpus.export import (
     export_corpus,
     import_corpus,
 )
-from the_commons.library.content_hash import compute_content_hash
+from the_commons.library.content_hash import compute_integrity
 from the_commons.library.models import Evidence
 from the_commons.library.store import InMemoryEvidenceStore
 
@@ -19,20 +19,22 @@ def _ev(eid: str, recipe: str = "rf", auc: float = 0.8, tier: str = "real") -> E
         "evidence_id": eid,
         "tier": tier,
         "outreach_origin": "external",
-        "intent": {"goal": "exploration", "expected_baseline": None, "tolerance": None},
-        "data_fingerprint": {"modality": "tabular", "sample_count_band": "10k-100k"},
-        "config": {"recipe_id": recipe},
-        "metrics": {"AUC": auc},
-        "worker_spec": {"cpu_cores": 8, "ram_gb": 16},
-        "attribution": {
-            "contributor_id": None,
-            "content_hash": "",
-            "created_at": datetime.now(UTC).isoformat(),
-            "pcq_version": "2.0.0",
-        },
         "synthetic_source": None,
+        "pcq_record": {
+            "intent": {"goal": "exploration", "expected_baseline": None, "tolerance": None},
+            "data_fingerprint": {"modality": "tabular", "sample_count_band": "10k-100k"},
+            "config": {"recipe_id": recipe},
+            "metrics": {"AUC": auc},
+            "worker_spec": {"cpu_cores": 8, "ram_gb": 16},
+            "attribution": {"operator": None},
+            "contract_version": "2.0",
+        },
     }
-    rec["attribution"]["content_hash"] = compute_content_hash(rec)
+    # model_validate 후 정규화된 pcq dump 위에 stamp (Pydantic defaults 일치 보장)
+    ev = Evidence.model_validate(rec)
+    pcq_norm = ev.pcq_record.model_dump(mode="json")
+    pcq_norm["integrity"] = compute_integrity(pcq_norm)
+    rec["pcq_record"] = pcq_norm
     return Evidence.model_validate(rec)
 
 
@@ -61,8 +63,8 @@ async def test_export_import_roundtrip_preserves_ids_and_hashes() -> None:
     assert total == 3
     assert {e.evidence_id for e in got} == {"a", "b", "c"}
     for e in got:
-        d = e.model_dump(mode="json")
-        assert e.attribution.content_hash == compute_content_hash(d)
+        pcq = e.pcq_record.model_dump(mode="json")
+        assert e.pcq_record.integrity.content_hash == compute_integrity(pcq)["content_hash"]
 
 
 async def test_export_includes_deprecated_l1_records() -> None:
@@ -107,14 +109,17 @@ async def test_import_is_idempotent_on_duplicates() -> None:
     assert total == 2
 
 
-async def test_content_hash_is_identity_not_evidence_id() -> None:
-    # DD1: 같은 내용·다른 evidence_id → content_hash 동일.
+async def test_pcq_integrity_is_envelope_independent() -> None:
+    # pcq 2.x: integrity는 pcq_record 내용으로만 결정 — envelope의
+    # evidence_id/tier/outreach_origin은 hash 입력에 무관 (R10 정합).
     a = _ev("id-1", "rf", 0.77)
     b_rec = a.model_dump(mode="json")
-    b_rec["evidence_id"] = "id-2"
-    b_rec["attribution"]["content_hash"] = ""
-    # evidence_id는 hash 입력에 포함되므로 다름이 정상 — 단 content는 매체 무관.
-    # 핵심 audit: hash는 row id가 아니라 record 내용으로 결정된다.
-    h = compute_content_hash(b_rec)
-    assert h.startswith("sha256:")
-    assert h != a.attribution.content_hash  # 내용(evidence_id) 다르면 hash 다름
+    b_rec["evidence_id"] = "id-2"  # envelope만 변경
+    # pcq_record는 동일 → integrity content_hash 동일이 정본 거동
+    h_a = a.pcq_record.integrity.content_hash
+    h_b = compute_integrity(b_rec["pcq_record"])["content_hash"]
+    assert h_a == h_b
+    # 그러나 pcq_record 내용을 바꾸면 hash 달라짐
+    b_rec["pcq_record"]["metrics"] = {"AUC": 0.99}
+    h_c = compute_integrity(b_rec["pcq_record"])["content_hash"]
+    assert h_c != h_a

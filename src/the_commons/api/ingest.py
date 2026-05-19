@@ -75,7 +75,18 @@ async def ingest_evidence(
             detail=f"PHI 차단 위반: {exc}",
         ) from exc
 
-    # 2. attribution
+    # 1.5. integrity server-derive (R6 — 1.x record는 integrity 부재; 부착해야
+    #      validator·store가 정상 동작. envelope 외부 변경 없음).
+    pcq_inner = cleaned.get("pcq_record")
+    if isinstance(pcq_inner, dict) and not pcq_inner.get("integrity"):
+        from the_commons.library.content_hash import compute_integrity
+
+        pcq_inner = dict(pcq_inner)
+        pcq_inner["integrity"] = compute_integrity(pcq_inner)
+        cleaned = dict(cleaned)
+        cleaned["pcq_record"] = pcq_inner
+
+    # 2. attribution + integrity 검증
     try:
         validate_attribution(cleaned)
     except AttributionError as exc:
@@ -131,9 +142,10 @@ async def ingest_evidence(
 
     # 5. cluster bucket 계산
     cluster_bucket = compute_problem_cluster_bucket(cleaned)
-    modality = evidence.data_fingerprint.modality
-    band = evidence.data_fingerprint.sample_count_band
-    goal = evidence.intent.goal
+    pcq = evidence.pcq_record
+    modality = pcq.data_fingerprint.modality if pcq.data_fingerprint else None
+    band = pcq.data_fingerprint.sample_count_band if pcq.data_fingerprint else None
+    goal = pcq.intent.goal if pcq.intent else None
 
     # 6. real evidence가 들어왔을 때: promote/contradicts evaluation + retirement
     promoted_ids: list[str] = []
