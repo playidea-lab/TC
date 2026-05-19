@@ -1,6 +1,5 @@
 """Composer — corpus 요약, 신뢰도 분류, candidate 조립 단위 테스트."""
 
-from datetime import UTC, datetime
 
 import pytest
 

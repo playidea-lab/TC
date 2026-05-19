@@ -1,6 +1,5 @@
 """infogain.normalize — 이웃 내 min-max 정규화 + intent.direction 반영 단위 테스트."""
 
-from datetime import UTC, datetime
 
 from the_commons.library.models import Evidence
 from the_commons.matchmaker.infogain.normalize import normalize_neighborhood

@@ -6,13 +6,11 @@
 """
 
 import asyncio
-from datetime import UTC, datetime
 
 import pytest
 
 from the_commons.library.models import Evidence
 from the_commons.library.store import InMemoryEvidenceStore
-from the_commons.llm.protocol import RankedCandidate
 from the_commons.matchmaker.infogain.reranker import InfoGainReranker
 from the_commons.matchmaker.retriever import InMemoryVectorIndex
 from the_commons.matchmaker.serializer import QueryFeatures

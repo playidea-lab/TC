@@ -75,7 +75,6 @@ async def test_embedder_failure_falls_back_to_cold_start() -> None:
 def seeded_index_and_store() -> tuple[InMemoryEvidenceStore, InMemoryVectorIndex]:
     """5건 evidence를 store + index에 시드해 corpus를 dense하게."""
     import asyncio
-    from datetime import UTC, datetime
 
     from the_commons.library.models import Evidence
 

@@ -14,7 +14,6 @@ from the_commons.api.recommend import (
 )
 from the_commons.auth.dependencies import require_contributor
 from the_commons.auth.jwt_verify import VerifiedClaims
-from the_commons.library.content_hash import compute_content_hash
 from the_commons.library.models import Evidence
 from the_commons.library.store import EvidenceStore, InMemoryEvidenceStore
 from the_commons.llm.protocol import RankedCandidate
@@ -49,23 +48,21 @@ def _seeded_evidence(eid: str, vector: list[float] = None, tier: str = "real") -
         "evidence_id": eid,
         "tier": tier,
         "outreach_origin": "external",
-        "intent": {"goal": "exploration", "expected_baseline": None, "tolerance": None},
-        "data_fingerprint": {
-            "modality": "tabular",
-            "sample_count_band": "10k-100k",
-            "schema_summary": {},
-            "statistical_moments": {},
-        },
-        "config": {"recipe_id": "lightgbm"},
-        "metrics": {"AUC": 0.85},
-        "worker_spec": {"cpu_cores": 32, "ram_gb": 64, "has_gpu": True},
-        "attribution": {
-            "contributor_id": None,
-            "content_hash": "",
-            "created_at": datetime.now(UTC).isoformat(),
-            "pcq_version": "2.0.0",
-        },
         "synthetic_source": None,
+        "pcq_record": {
+            "intent": {"goal": "exploration", "expected_baseline": None, "tolerance": None},
+            "data_fingerprint": {
+                "modality": "tabular",
+                "sample_count_band": "10k-100k",
+                "schema_summary": {},
+                "statistical_moments": {},
+            },
+            "config": {"recipe_id": "lightgbm"},
+            "metrics": {"AUC": 0.85},
+            "worker_spec": {"cpu_cores": 32, "ram_gb": 64, "has_gpu": True},
+            "attribution": {"operator": None},
+            "contract_version": "2.0",
+        },
     }
     if tier == "synthetic":
         rec["synthetic_source"] = {
@@ -74,7 +71,6 @@ def _seeded_evidence(eid: str, vector: list[float] = None, tier: str = "real") -
             "generated_at": datetime.now(UTC).isoformat(),
             "verifier": None,
         }
-    rec["attribution"]["content_hash"] = compute_content_hash(rec)
     return rec
 
 

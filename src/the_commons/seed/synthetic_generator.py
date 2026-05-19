@@ -19,7 +19,7 @@ from dataclasses import dataclass
 from datetime import UTC, datetime
 from typing import Any, Protocol, runtime_checkable
 
-from the_commons.library.content_hash import compute_content_hash
+from the_commons.library.content_hash import compute_integrity
 
 logger = logging.getLogger(__name__)
 
@@ -66,10 +66,7 @@ def build_synthetic_record(
     검증·저장은 /ingest 경로 그대로 사용.
     """
     now = datetime.now(UTC)
-    record: dict[str, Any] = {
-        "evidence_id": f"ev-syn-{evidence_id_suffix}",
-        "tier": "synthetic",
-        "outreach_origin": "internal",  # PI Lab 시드 origin
+    pcq_record: dict[str, Any] = {
         "intent": {
             "goal": spec.intent_goal,
             "expected_baseline": {
@@ -97,20 +94,23 @@ def build_synthetic_record(
             "ram_gb": 1,
             "has_gpu": False,
         },
-        "attribution": {
-            "contributor_id": None,
-            "content_hash": "",  # 직후 채움
-            "created_at": now.isoformat(),
-            "pcq_version": "2.0.0",
-        },
+        "attribution": {"operator": None},
+        "contract_version": "2.0",
+        "last_updated_at": now.isoformat(),
+    }
+    pcq_record["integrity"] = compute_integrity(pcq_record)
+    record: dict[str, Any] = {
+        "evidence_id": f"ev-syn-{evidence_id_suffix}",
+        "tier": "synthetic",
+        "outreach_origin": "internal",
         "synthetic_source": {
             "source_model": source_model,
             "prompt_hash": prompt_hash,
             "generated_at": now.isoformat(),
             "verifier": None,
         },
+        "pcq_record": pcq_record,
     }
-    record["attribution"]["content_hash"] = compute_content_hash(record)
     return record
 
 

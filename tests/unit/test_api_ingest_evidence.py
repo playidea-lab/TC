@@ -9,7 +9,6 @@ from fastapi.testclient import TestClient
 from the_commons.api.dependencies import get_evidence_store
 from the_commons.auth.dependencies import require_contributor
 from the_commons.auth.jwt_verify import VerifiedClaims
-from the_commons.library.content_hash import compute_content_hash
 from the_commons.library.store import EvidenceStore, InMemoryEvidenceStore
 from the_commons.main import app
 
@@ -25,27 +24,25 @@ def _signed_record(
         "evidence_id": evidence_id,
         "tier": tier,
         "outreach_origin": "external",
-        "intent": {
-            "goal": "exploration",
-            "expected_baseline": None,
-            "tolerance": None,
-        },
-        "data_fingerprint": {
-            "modality": "tabular",
-            "sample_count_band": "10k-100k",
-            "schema_summary": {},
-            "statistical_moments": {},
-        },
-        "config": {"lr": 0.01},
-        "metrics": {"AUC": metric_value},
-        "worker_spec": {"cpu_cores": 32, "ram_gb": 64, "has_gpu": True},
-        "attribution": {
-            "contributor_id": None,
-            "content_hash": "",
-            "created_at": datetime.now(UTC).isoformat(),
-            "pcq_version": "2.0.0",
-        },
         "synthetic_source": None,
+        "pcq_record": {
+            "intent": {
+                "goal": "exploration",
+                "expected_baseline": None,
+                "tolerance": None,
+            },
+            "data_fingerprint": {
+                "modality": "tabular",
+                "sample_count_band": "10k-100k",
+                "schema_summary": {},
+                "statistical_moments": {},
+            },
+            "config": {"lr": 0.01},
+            "metrics": {"AUC": metric_value},
+            "worker_spec": {"cpu_cores": 32, "ram_gb": 64, "has_gpu": True},
+            "attribution": {"operator": None},
+            "contract_version": "2.0",
+        },
     }
     if tier == "synthetic":
         base["synthetic_source"] = {
@@ -54,7 +51,7 @@ def _signed_record(
             "generated_at": datetime.now(UTC).isoformat(),
             "verifier": None,
         }
-    base["attribution"]["content_hash"] = compute_content_hash(base)
+    # integrity는 ingest 파이프라인이 server-derive (생략)
     return base
 
 
@@ -118,23 +115,26 @@ def test_ingest_then_read_returns_same_evidence(authed_client: TestClient) -> No
     assert response.status_code == 200
     fetched = response.json()["evidence"]
     assert fetched["evidence_id"] == "ev-read-1"
-    assert fetched["metrics"]["AUC"] == 0.84
+    assert fetched["pcq_record"]["metrics"]["AUC"] == 0.84
 
 
 def test_ingest_rejects_phi_violation(authed_client: TestClient) -> None:
     """raw_samples 같은 PHI는 400으로 거부."""
     record = _signed_record()
-    record["data_fingerprint"]["raw_samples"] = [[1, 2, 3]]
-    # content_hash는 의도적으로 재계산 안 함 (어차피 PHI 검사가 먼저)
+    record["pcq_record"]["data_fingerprint"]["raw_samples"] = [[1, 2, 3]]
     response = authed_client.post("/ingest", json={"evidence": record})
     assert response.status_code == 400
     assert "PHI" in response.json()["detail"]
 
 
 def test_ingest_rejects_content_hash_mismatch(authed_client: TestClient) -> None:
-    """attribution.content_hash 변조는 400."""
+    """변조된 integrity content_hash는 400 (정본 byte-parity 위반)."""
     record = _signed_record()
-    record["metrics"]["AUC"] = 0.99  # 사후 변조
+    # 미리 integrity를 stamp한 뒤 metric만 변조 → ingest의 1.5단계가 새로 계산
+    # 하므로 declared와 새 계산이 다르면 거부. 여기선 명시적 변조 hash 박기.
+    from the_commons.library.content_hash import compute_integrity
+    record["pcq_record"]["integrity"] = compute_integrity(record["pcq_record"])
+    record["pcq_record"]["metrics"]["AUC"] = 0.99  # 사후 변조
     response = authed_client.post("/ingest", json={"evidence": record})
     assert response.status_code == 400
     assert "content_hash" in response.json()["detail"]
@@ -144,7 +144,6 @@ def test_ingest_rejects_synthetic_without_source(authed_client: TestClient) -> N
     """tier=synthetic인데 synthetic_source 없으면 400."""
     record = _signed_record(tier="synthetic")
     record["synthetic_source"] = None
-    record["attribution"]["content_hash"] = compute_content_hash(record)
     response = authed_client.post("/ingest", json={"evidence": record})
     assert response.status_code == 400
     assert "synthetic_source" in response.json()["detail"]

@@ -1,6 +1,5 @@
 """서비스화 게이트 — C1/C2/C3 산정 + 측정불가(거짓통과 금지) + escape 단위 테스트."""
 
-from datetime import UTC, datetime
 
 import pytest
 

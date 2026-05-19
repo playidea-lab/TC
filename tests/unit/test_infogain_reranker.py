@@ -1,6 +1,5 @@
 """infogain.reranker — InfoGainReranker orchestrator 단위 테스트."""
 
-from datetime import UTC, datetime
 
 from the_commons.library.models import Evidence
 from the_commons.matchmaker.infogain.llm_prior import WEAK_DEFAULT_PRIOR

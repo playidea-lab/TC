@@ -10,7 +10,6 @@
 
 import asyncio
 from collections.abc import AsyncIterator
-from datetime import UTC, datetime
 
 import pytest
 from fastapi.testclient import TestClient
@@ -26,7 +25,7 @@ from the_commons.api.recommend import (
 )
 from the_commons.auth.dependencies import require_contributor
 from the_commons.auth.jwt_verify import VerifiedClaims
-from the_commons.library.content_hash import compute_content_hash
+from the_commons.library.content_hash import compute_integrity
 from the_commons.library.models import Evidence
 from the_commons.library.store import EvidenceStore, InMemoryEvidenceStore
 from the_commons.llm.protocol import RankedCandidate
@@ -63,29 +62,27 @@ def _real_record(evidence_id: str, *, metric: float, contributor: str) -> dict:
         "evidence_id": evidence_id,
         "tier": "real",
         "outreach_origin": "external",
-        "intent": {
-            "goal": "sota_challenge",
-            "expected_baseline": {"metric": "AUC", "value": 0.85},
-            "tolerance": {"direction": "higher_is_better", "margin": 0.05},
-        },
-        "data_fingerprint": {
-            "modality": "tabular",
-            "sample_count_band": "10k-100k",
-            "schema_summary": {},
-            "statistical_moments": {},
-        },
-        "config": {"recipe_id": "lightgbm"},
-        "metrics": {"AUC": metric},
-        "worker_spec": {"cpu_cores": 32, "ram_gb": 64, "has_gpu": True},
-        "attribution": {
-            "contributor_id": contributor,
-            "content_hash": "",
-            "created_at": datetime.now(UTC).isoformat(),
-            "pcq_version": "2.0.0",
-        },
         "synthetic_source": None,
+        "pcq_record": {
+            "intent": {
+                "goal": "sota_challenge",
+                "expected_baseline": {"metric": "AUC", "value": 0.85},
+                "tolerance": {"direction": "higher_is_better", "margin": 0.05},
+            },
+            "data_fingerprint": {
+                "modality": "tabular",
+                "sample_count_band": "10k-100k",
+                "schema_summary": {},
+                "statistical_moments": {},
+            },
+            "config": {"recipe_id": "lightgbm"},
+            "metrics": {"AUC": metric},
+            "worker_spec": {"cpu_cores": 32, "ram_gb": 64, "has_gpu": True},
+            "attribution": {"operator": contributor},
+            "contract_version": "2.0",
+        },
     }
-    rec["attribution"]["content_hash"] = compute_content_hash(rec)
+    rec["pcq_record"]["integrity"] = compute_integrity(rec["pcq_record"])
     return rec
 
 
@@ -156,15 +153,15 @@ def narrative_setup():
         await evidence_store.insert(ev)
         index.add(ev.evidence_id, [1.0, 0.0, 0.0], tier="synthetic")
 
-        # 추가 3개로 vector index 채움 (총 synthetic 4개)
-        # → K1 real 추가 후 5개 (recommend_top_n=5와 동일)
+        # 추가 3개로 vector index 채움 — pcq_record에 diversifier 주입해 hash 다르게
         for i in range(3):
             extra = dict(syn)
             extra["evidence_id"] = f"ev-syn-extra-{i}"
-            extra["attribution"] = dict(syn["attribution"])
-            extra["attribution"]["content_hash"] = (
-                f"sha256:{'9' * 56}{i:08x}"  # 임의 unique
-            )
+            extra_pcq = dict(syn["pcq_record"])
+            extra_pcq["config"] = dict(syn["pcq_record"]["config"])
+            extra_pcq["config"]["seed"] = i  # diversifier
+            extra_pcq["integrity"] = compute_integrity(extra_pcq)
+            extra["pcq_record"] = extra_pcq
             extra_ev = Evidence.model_validate(extra)
             await evidence_store.insert(extra_ev)
             index.add(extra_ev.evidence_id, [1.0, 0.0, 0.0], tier="synthetic")

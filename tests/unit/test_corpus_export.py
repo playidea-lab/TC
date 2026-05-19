@@ -1,6 +1,5 @@
 """corpus.export — export/import round-trip + content-hash 무결성 단위 테스트."""
 
-from datetime import UTC, datetime
 
 import pytest
 

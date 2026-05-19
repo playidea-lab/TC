@@ -3,7 +3,6 @@
 from datetime import UTC, datetime
 
 from the_commons.library.models import (
-    Attribution,
     DataFingerprint,
     Evidence,
     Intent,

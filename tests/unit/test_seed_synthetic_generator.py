@@ -2,7 +2,7 @@
 
 import pytest
 
-from the_commons.library.content_hash import verify_content_hash
+from the_commons.library.content_hash import verify_integrity
 from the_commons.seed.synthetic_generator import (
     SeedSpec,
     SyntheticOracle,
@@ -62,11 +62,12 @@ def test_build_synthetic_record_is_pcq_2x_compliant() -> None:
 
     assert rec["tier"] == "synthetic"
     assert rec["outreach_origin"] == "internal"
-    assert rec["intent"]["goal"] == "sota_challenge"
-    assert rec["intent"]["expected_baseline"] == {"metric": "AUC", "value": 0.85}
+    pcq = rec["pcq_record"]
+    assert pcq["intent"]["goal"] == "sota_challenge"
+    assert pcq["intent"]["expected_baseline"] == {"metric": "AUC", "value": 0.85}
     assert rec["synthetic_source"]["source_model"] == "gemini-flash-2.5"
     assert rec["synthetic_source"]["prompt_hash"] == "sha256:abc"
-    assert rec["attribution"]["pcq_version"] == "2.0.0"
+    assert pcq["contract_version"] == "2.0"
 
 
 def test_build_synthetic_record_content_hash_self_verifies() -> None:
@@ -87,7 +88,8 @@ def test_build_synthetic_record_content_hash_self_verifies() -> None:
     rec = build_synthetic_record(
         spec, prediction, source_model="x", prompt_hash="sha256:y", evidence_id_suffix="z"
     )
-    assert verify_content_hash(rec) is True
+    integ = rec["pcq_record"]["integrity"]
+    assert verify_integrity(rec["pcq_record"], integ["content_hash"]) is True
 
 
 async def test_generate_seed_records_returns_one_record_per_spec() -> None:
@@ -111,8 +113,8 @@ async def test_generate_seed_records_returns_one_record_per_spec() -> None:
     )
     assert len(records) == 2
     assert all(r["tier"] == "synthetic" for r in records)
-    assert records[0]["config"]["recipe_id"] == "lightgbm"
-    assert records[1]["config"]["recipe_id"] == "xgboost"
+    assert records[0]["pcq_record"]["config"]["recipe_id"] == "lightgbm"
+    assert records[1]["pcq_record"]["config"]["recipe_id"] == "xgboost"
 
 
 async def test_generate_seed_records_skips_failing_oracle_calls() -> None:
@@ -166,4 +168,4 @@ def test_recipe_appears_in_record_config(recipe_id: str) -> None:
     rec = build_synthetic_record(
         spec, prediction, source_model="x", prompt_hash="sha256:y", evidence_id_suffix="z"
     )
-    assert rec["config"]["recipe_id"] == recipe_id
+    assert rec["pcq_record"]["config"]["recipe_id"] == recipe_id

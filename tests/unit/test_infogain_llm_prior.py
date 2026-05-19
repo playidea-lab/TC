@@ -1,6 +1,5 @@
 """infogain.llm_prior — 저데이터 regime LLM Beta prior + RR6 graceful degrade."""
 
-import pytest
 
 from the_commons.matchmaker.infogain.llm_prior import (
     WEAK_DEFAULT_PRIOR,

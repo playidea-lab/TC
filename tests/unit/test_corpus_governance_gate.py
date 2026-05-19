@@ -8,7 +8,6 @@
 운영 DR 장치. 코드만 Apache-2.0 OSS, 운영·코퍼스는 PI Lab 자산.)
 """
 
-from datetime import UTC, datetime
 
 import pytest
 
