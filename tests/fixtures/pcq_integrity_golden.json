@@ -1,0 +1,182 @@
+{
+  "provenance": {
+    "repo": "playidea-lab/pcq",
+    "commit": "5e86bee",
+    "version": "v4.9.0",
+    "generated": "2026-05-19",
+    "source": "pcq.contract.build_integrity_object"
+  },
+  "vectors": [
+    {
+      "name": "2x_full",
+      "record": {
+        "intent": {
+          "goal": "sota_challenge",
+          "expected_baseline": {
+            "metric": "AUC",
+            "value": 0.9
+          },
+          "tolerance": {
+            "direction": "higher_is_better",
+            "margin": 0.02
+          }
+        },
+        "config": {
+          "recipe_id": "xgboost",
+          "lr": 0.1,
+          "seed": 42
+        },
+        "metrics": {
+          "AUC": 0.93,
+          "loss": 0.21
+        },
+        "data_fingerprint": {
+          "modality": "tabular",
+          "sample_count_band": "10k-100k",
+          "n_features": 32
+        },
+        "worker_spec": {
+          "cpu_cores": 16,
+          "ram_gb": 64,
+          "gpu": "RTX5080"
+        },
+        "attribution": {
+          "author": {
+            "id": "agent-1",
+            "kind": "agent"
+          },
+          "committer": {
+            "id": "cm",
+            "kind": "human"
+          },
+          "operator": "pilab",
+          "session_id": "s-abc",
+          "signature": "SHOULD-BE-EXCLUDED"
+        },
+        "contract_version": "2.0",
+        "integrity": {
+          "content_hash": "sha256:STALE-SHOULD-BE-EXCLUDED",
+          "hashed_fields": []
+        },
+        "extra_unhashed": {
+          "x": 1
+        }
+      },
+      "expected_integrity": {
+        "content_hash": "sha256:a65cbe83a6506f8858c386094988574a6355e2e0b141718664c36224e6d6dc1a",
+        "hashed_fields": [
+          "intent",
+          "config",
+          "metrics",
+          "data_fingerprint",
+          "worker_spec",
+          "attribution.author",
+          "attribution.committer",
+          "attribution.operator",
+          "contract_version"
+        ]
+      }
+    },
+    {
+      "name": "1x_legacy",
+      "record": {
+        "config": {
+          "recipe_id": "randomforest"
+        },
+        "metrics": {
+          "AUC": 0.81
+        },
+        "data_fingerprint": {
+          "modality": "tabular",
+          "sample_count_band": "1k-10k"
+        },
+        "worker_spec": {
+          "cpu_cores": 8,
+          "ram_gb": 16
+        },
+        "attribution": {
+          "operator": "pilab"
+        }
+      },
+      "expected_integrity": {
+        "content_hash": "sha256:8346cc9471dc5ebadea3003f6bde39f0ab3416d5abba168b52a8142f7243d309",
+        "hashed_fields": [
+          "intent",
+          "config",
+          "metrics",
+          "data_fingerprint",
+          "worker_spec",
+          "attribution.author",
+          "attribution.committer",
+          "attribution.operator",
+          "contract_version"
+        ]
+      }
+    },
+    {
+      "name": "null_intent",
+      "record": {
+        "intent": {
+          "goal": null,
+          "expected_baseline": null,
+          "tolerance": null
+        },
+        "config": {
+          "recipe_id": "lgbm"
+        },
+        "metrics": {
+          "f1": 0.7
+        },
+        "data_fingerprint": {
+          "modality": "tabular",
+          "sample_count_band": "10k-100k"
+        },
+        "worker_spec": {
+          "cpu_cores": 4,
+          "ram_gb": 8
+        },
+        "attribution": {
+          "author": null,
+          "committer": null,
+          "operator": "ext-user"
+        },
+        "contract_version": "2.0"
+      },
+      "expected_integrity": {
+        "content_hash": "sha256:1dad774adee408103a9bf4803d7eeb33aef36e4c9dacd87c18f05f0b02dc5744",
+        "hashed_fields": [
+          "intent",
+          "config",
+          "metrics",
+          "data_fingerprint",
+          "worker_spec",
+          "attribution.author",
+          "attribution.committer",
+          "attribution.operator",
+          "contract_version"
+        ]
+      }
+    },
+    {
+      "name": "minimal",
+      "record": {
+        "config": {},
+        "metrics": {}
+      },
+      "expected_integrity": {
+        "content_hash": "sha256:c9fa881b2d0db949940195d4444869964ebe479c178a2e9e46d1b8d7e1ebc042",
+        "hashed_fields": [
+          "intent",
+          "config",
+          "metrics",
+          "data_fingerprint",
+          "worker_spec",
+          "attribution.author",
+          "attribution.committer",
+          "attribution.operator",
+          "contract_version"
+        ]
+      }
+    }
+  ]
+}
