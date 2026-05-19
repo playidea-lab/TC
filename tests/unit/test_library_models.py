@@ -6,32 +6,30 @@ import pytest
 from pydantic import ValidationError
 
 from the_commons.library.models import (
-    Attribution,
     DataFingerprint,
     Evidence,
     Intent,
+    PcqRecord,
     SyntheticSource,
     WorkerSpec,
 )
 
 
 def _minimal_evidence_kwargs() -> dict:
-    """필수 필드만 채운 evidence kwargs."""
+    """필수 필드만 채운 envelope evidence kwargs."""
     return {
         "evidence_id": "ev-test",
         "tier": "real",
         "outreach_origin": "external",
-        "intent": Intent(goal="exploration"),
-        "data_fingerprint": DataFingerprint(
-            modality="tabular",
-            sample_count_band="10k-100k",
-        ),
-        "config": {"lr": 0.01},
-        "metrics": {"AUC": 0.847},
-        "worker_spec": WorkerSpec(cpu_cores=32, ram_gb=64, has_gpu=True),
-        "attribution": Attribution(
-            content_hash="sha256:abc",
-            created_at=datetime.now(UTC),
+        "pcq_record": PcqRecord(
+            intent=Intent(goal="exploration"),
+            data_fingerprint=DataFingerprint(
+                modality="tabular", sample_count_band="10k-100k"
+            ),
+            config={"lr": 0.01},
+            metrics={"AUC": 0.847},
+            worker_spec=WorkerSpec(cpu_cores=32, ram_gb=64, has_gpu=True),
+            contract_version="2.0",
         ),
     }
 
