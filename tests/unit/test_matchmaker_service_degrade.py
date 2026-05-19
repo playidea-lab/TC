@@ -77,7 +77,6 @@ def seeded_index_and_store() -> tuple[InMemoryEvidenceStore, InMemoryVectorIndex
     import asyncio
     from datetime import UTC, datetime
 
-    from the_commons.library.content_hash import compute_content_hash
     from the_commons.library.models import Evidence
 
     store = InMemoryEvidenceStore()
@@ -89,29 +88,26 @@ def seeded_index_and_store() -> tuple[InMemoryEvidenceStore, InMemoryVectorIndex
                 "evidence_id": f"ev-{i}",
                 "tier": "real",
                 "outreach_origin": "external",
-                "intent": {
-                    "goal": "exploration",
-                    "expected_baseline": None,
-                    "tolerance": None,
-                },
-                "data_fingerprint": {
-                    "modality": "tabular",
-                    "sample_count_band": "10k-100k",
-                    "schema_summary": {},
-                    "statistical_moments": {},
-                },
-                "config": {"recipe_id": "lightgbm"},
-                "metrics": {"AUC": 0.85},
-                "worker_spec": {"cpu_cores": 32, "ram_gb": 64, "has_gpu": True},
-                "attribution": {
-                    "contributor_id": None,
-                    "content_hash": "",
-                    "created_at": datetime.now(UTC).isoformat(),
-                    "pcq_version": "2.0.0",
-                },
                 "synthetic_source": None,
+                "pcq_record": {
+                    "intent": {
+                        "goal": "exploration",
+                        "expected_baseline": None,
+                        "tolerance": None,
+                    },
+                    "data_fingerprint": {
+                        "modality": "tabular",
+                        "sample_count_band": "10k-100k",
+                        "schema_summary": {},
+                        "statistical_moments": {},
+                    },
+                    "config": {"recipe_id": "lightgbm"},
+                    "metrics": {"AUC": 0.85},
+                    "worker_spec": {"cpu_cores": 32, "ram_gb": 64, "has_gpu": True},
+                    "attribution": {"operator": None},
+                    "contract_version": "2.0",
+                },
             }
-            rec["attribution"]["content_hash"] = compute_content_hash(rec)
             await store.insert(Evidence.model_validate(rec))
             index.add(f"ev-{i}", [1.0, 0.0, 0.0], tier="real")
 

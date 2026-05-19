@@ -10,7 +10,6 @@ from fastapi.testclient import TestClient
 from the_commons.api.dependencies import get_evidence_store, get_reciprocity_store
 from the_commons.auth.dependencies import require_contributor
 from the_commons.auth.jwt_verify import VerifiedClaims
-from the_commons.library.content_hash import compute_content_hash
 from the_commons.library.models import Evidence
 from the_commons.library.store import EvidenceStore, InMemoryEvidenceStore
 from the_commons.main import app
@@ -23,18 +22,16 @@ def _ev(eid: str, tier: str = "real") -> Evidence:
         "evidence_id": eid,
         "tier": tier,
         "outreach_origin": "external",
-        "intent": {"goal": "exploration", "expected_baseline": None, "tolerance": None},
-        "data_fingerprint": {"modality": "tabular", "sample_count_band": "10k-100k"},
-        "config": {"recipe_id": "rf"},
-        "metrics": {"AUC": 0.85},
-        "worker_spec": {"cpu_cores": 8, "ram_gb": 16},
-        "attribution": {
-            "contributor_id": None,
-            "content_hash": "",
-            "created_at": datetime.now(UTC).isoformat(),
-            "pcq_version": "2.0.0",
-        },
         "synthetic_source": None,
+        "pcq_record": {
+            "intent": {"goal": "exploration", "expected_baseline": None, "tolerance": None},
+            "data_fingerprint": {"modality": "tabular", "sample_count_band": "10k-100k"},
+            "config": {"recipe_id": "rf"},
+            "metrics": {"AUC": 0.85},
+            "worker_spec": {"cpu_cores": 8, "ram_gb": 16},
+            "attribution": {"operator": None},
+            "contract_version": "2.0",
+        },
     }
     if tier == "synthetic":
         rec["synthetic_source"] = {
@@ -43,7 +40,6 @@ def _ev(eid: str, tier: str = "real") -> Evidence:
             "generated_at": datetime.now(UTC).isoformat(),
             "verifier": None,
         }
-    rec["attribution"]["content_hash"] = compute_content_hash(rec)
     return Evidence.model_validate(rec)
 
 

@@ -4,7 +4,6 @@ from datetime import UTC, datetime
 
 import pytest
 
-from the_commons.library.content_hash import compute_content_hash
 from the_commons.library.models import Evidence
 from the_commons.library.store import InMemoryEvidenceStore
 from the_commons.reciprocity.productization_gate import build_productization_gate
@@ -38,20 +37,17 @@ def _ev(eid: str, tier: str) -> Evidence:
         "evidence_id": eid,
         "tier": tier,
         "outreach_origin": "external",
-        "intent": {"goal": "exploration", "expected_baseline": None, "tolerance": None},
-        "data_fingerprint": {"modality": "tabular", "sample_count_band": "10k-100k"},
-        "config": {"recipe_id": "rf"},
-        "metrics": {"AUC": 0.8},
-        "worker_spec": {"cpu_cores": 8, "ram_gb": 16},
-        "attribution": {
-            "contributor_id": None,
-            "content_hash": "",
-            "created_at": datetime.now(UTC).isoformat(),
-            "pcq_version": "2.0.0",
-        },
         "synthetic_source": None,
+        "pcq_record": {
+            "intent": {"goal": "exploration", "expected_baseline": None, "tolerance": None},
+            "data_fingerprint": {"modality": "tabular", "sample_count_band": "10k-100k"},
+            "config": {"recipe_id": "rf"},
+            "metrics": {"AUC": 0.8},
+            "worker_spec": {"cpu_cores": 8, "ram_gb": 16},
+            "attribution": {"operator": None},
+            "contract_version": "2.0",
+        },
     }
-    rec["attribution"]["content_hash"] = compute_content_hash(rec)
     return Evidence.model_validate(rec)
 
 

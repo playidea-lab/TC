@@ -10,7 +10,6 @@ from datetime import UTC, datetime
 
 import pytest
 
-from the_commons.library.content_hash import compute_content_hash
 from the_commons.library.models import Evidence
 from the_commons.library.store import InMemoryEvidenceStore
 from the_commons.llm.protocol import RankedCandidate
@@ -80,27 +79,24 @@ def seeded() -> tuple[InMemoryEvidenceStore, InMemoryVectorIndex]:
                 "evidence_id": f"ev-{i}",
                 "tier": "real",
                 "outreach_origin": "external",
-                "intent": {
-                    "goal": "exploration",
-                    "expected_baseline": {"metric": "AUC"},
-                    "tolerance": {"direction": "higher_is_better"},
-                },
-                "data_fingerprint": {
-                    "modality": "tabular",
-                    "sample_count_band": "10k-100k",
-                },
-                "config": {"recipe_id": recipe},
-                "metrics": {"AUC": auc},
-                "worker_spec": {"cpu_cores": 8, "ram_gb": 16},
-                "attribution": {
-                    "contributor_id": None,
-                    "content_hash": "",
-                    "created_at": datetime.now(UTC).isoformat(),
-                    "pcq_version": "2.0.0",
-                },
                 "synthetic_source": None,
+                "pcq_record": {
+                    "intent": {
+                        "goal": "exploration",
+                        "expected_baseline": {"metric": "AUC"},
+                        "tolerance": {"direction": "higher_is_better"},
+                    },
+                    "data_fingerprint": {
+                        "modality": "tabular",
+                        "sample_count_band": "10k-100k",
+                    },
+                    "config": {"recipe_id": recipe},
+                    "metrics": {"AUC": auc},
+                    "worker_spec": {"cpu_cores": 8, "ram_gb": 16},
+                    "attribution": {"operator": None},
+                    "contract_version": "2.0",
+                },
             }
-            rec["attribution"]["content_hash"] = compute_content_hash(rec)
             await store.insert(Evidence.model_validate(rec))
             index.add(f"ev-{i}", [1.0, 0.0, 0.0], tier="real")
 

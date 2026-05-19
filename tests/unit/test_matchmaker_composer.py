@@ -4,7 +4,6 @@ from datetime import UTC, datetime
 
 import pytest
 
-from the_commons.library.content_hash import compute_content_hash
 from the_commons.library.models import (
     Evidence,
 )
@@ -23,25 +22,22 @@ def _evidence(eid: str, recipe: str = "lightgbm", auc: float = 0.85) -> Evidence
         "evidence_id": eid,
         "tier": "real",
         "outreach_origin": "external",
-        "intent": {"goal": "exploration", "expected_baseline": None, "tolerance": None},
-        "data_fingerprint": {
-            "modality": "tabular",
-            "sample_count_band": "10k-100k",
-            "schema_summary": {},
-            "statistical_moments": {},
-        },
-        "config": {"recipe_id": recipe},
-        "metrics": {"AUC": auc},
-        "worker_spec": {"cpu_cores": 32, "ram_gb": 64, "has_gpu": True},
-        "attribution": {
-            "contributor_id": None,
-            "content_hash": "",
-            "created_at": datetime.now(UTC).isoformat(),
-            "pcq_version": "2.0.0",
-        },
         "synthetic_source": None,
+        "pcq_record": {
+            "intent": {"goal": "exploration", "expected_baseline": None, "tolerance": None},
+            "data_fingerprint": {
+                "modality": "tabular",
+                "sample_count_band": "10k-100k",
+                "schema_summary": {},
+                "statistical_moments": {},
+            },
+            "config": {"recipe_id": recipe},
+            "metrics": {"AUC": auc},
+            "worker_spec": {"cpu_cores": 32, "ram_gb": 64, "has_gpu": True},
+            "attribution": {"operator": None},
+            "contract_version": "2.0",
+        },
     }
-    rec_dict["attribution"]["content_hash"] = compute_content_hash(rec_dict)
     return Evidence.model_validate(rec_dict)
 
 

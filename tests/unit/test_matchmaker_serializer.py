@@ -2,7 +2,6 @@
 
 from datetime import UTC, datetime
 
-from the_commons.library.content_hash import compute_content_hash
 from the_commons.library.models import (
     Attribution,
     DataFingerprint,
@@ -33,27 +32,26 @@ def _query(**overrides) -> QueryFeatures:
 
 
 def _evidence(**overrides) -> Evidence:
+    pcq_overrides = overrides.pop("pcq", {})
+    pcq = {
+        "intent": {"goal": "exploration"},
+        "data_fingerprint": {"modality": "tabular", "sample_count_band": "10k-100k"},
+        "config": {"recipe_id": "lightgbm", "lr": 0.05},
+        "metrics": {"AUC": 0.8475},
+        "worker_spec": {"cpu_cores": 32, "ram_gb": 64, "has_gpu": True},
+        "attribution": {"operator": None},
+        "contract_version": "2.0",
+    }
+    pcq.update(pcq_overrides)
     base = {
         "evidence_id": "ev-t",
         "tier": "real",
         "outreach_origin": "external",
-        "intent": Intent(goal="exploration"),
-        "data_fingerprint": DataFingerprint(
-            modality="tabular", sample_count_band="10k-100k"
-        ),
-        "config": {"recipe_id": "lightgbm", "lr": 0.05},
-        "metrics": {"AUC": 0.8475},
-        "worker_spec": WorkerSpec(cpu_cores=32, ram_gb=64, has_gpu=True),
-        "attribution": Attribution(
-            content_hash="sha256:placeholder",
-            created_at=datetime.now(UTC),
-        ),
+        "synthetic_source": None,
+        "pcq_record": pcq,
     }
     base.update(overrides)
-    # content_hash 채우기 (override 후)
-    ev = Evidence(**base).model_dump(mode="json")
-    ev["attribution"]["content_hash"] = compute_content_hash(ev)
-    return Evidence.model_validate(ev)
+    return Evidence.model_validate(base)
 
 
 def test_registry_default_supports_v1() -> None:
@@ -111,11 +109,7 @@ def test_serialize_evidence_with_synthetic_tier_labels_distillation() -> None:
         prompt_hash="sha256:x",
         generated_at=datetime.now(UTC),
     )
-    ev_dict = _evidence(tier="synthetic", synthetic_source=syn_source).model_dump(
-        mode="json"
-    )
-    ev_dict["attribution"]["content_hash"] = compute_content_hash(ev_dict)
-    ev = Evidence.model_validate(ev_dict)
+    ev = _evidence(tier="synthetic", synthetic_source=syn_source)
 
     text = default_registry().serialize_evidence(ev, version="v1")
     assert "synthetic" in text.lower()
