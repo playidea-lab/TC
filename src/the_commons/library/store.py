@@ -102,6 +102,7 @@ class InMemoryEvidenceStore:
         self._by_id: dict[str, Evidence] = {}
         self._hashes: set[str] = set()
         self._deprecated: set[str] = set()
+        self._lineage: list[dict[str, Any]] = []
 
     async def insert(self, evidence: Evidence) -> None:
         # evidence_id가 유일성 키. content_hash는 무결성 증명일 뿐 — pcq 2.x
@@ -115,6 +116,21 @@ class InMemoryEvidenceStore:
         ch = _content_hash_of(evidence)
         if ch is not None:
             self._hashes.add(ch)
+        # lineage 엣지 append (envelope.lineage)
+        for edge in evidence.lineage or []:
+            self._lineage.append(
+                {
+                    "source_evidence_id": evidence.evidence_id,
+                    "target_evidence_id": edge.target_evidence_id,
+                    "edge_type": edge.type,
+                    "origin": evidence.outreach_origin,
+                    "metadata": edge.metadata,
+                }
+            )
+
+    def lineage_edges(self) -> list[dict[str, Any]]:
+        """테스트용 — 적재된 lineage 엣지 스냅샷."""
+        return list(self._lineage)
 
     async def get_by_id(self, evidence_id: str) -> Evidence | None:
         return self._by_id.get(evidence_id)
@@ -222,6 +238,16 @@ VALUES (
 )
 """
 
+_INSERT_LINEAGE_SQL = """
+INSERT INTO lineage_edge (
+    source_evidence_id, target_evidence_id, edge_type, origin, metadata
+)
+VALUES (
+    %(source_evidence_id)s, %(target_evidence_id)s,
+    %(edge_type)s, %(origin)s, %(metadata)s
+)
+"""
+
 _SELECT_BY_ID_SQL = "SELECT run_record FROM evidence WHERE evidence_id = %s"
 
 _LIST_ACTIVE_SYNTHETICS_SQL = """
@@ -268,6 +294,20 @@ class PostgresEvidenceStore:
         try:
             async with self._conn.cursor() as cur:
                 await cur.execute(_INSERT_SQL, params)
+                # lineage 엣지를 같은 트랜잭션에 append (LE2).
+                for edge in evidence.lineage or []:
+                    await cur.execute(
+                        _INSERT_LINEAGE_SQL,
+                        {
+                            "source_evidence_id": evidence.evidence_id,
+                            "target_evidence_id": edge.target_evidence_id,
+                            "edge_type": edge.type,
+                            "origin": evidence.outreach_origin,
+                            "metadata": (
+                                json.dumps(edge.metadata) if edge.metadata else None
+                            ),
+                        },
+                    )
             await self._conn.commit()
         except psycopg.errors.UniqueViolation as exc:
             await self._conn.rollback()

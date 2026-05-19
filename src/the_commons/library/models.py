@@ -151,10 +151,29 @@ class SyntheticSource(BaseModel):
     )
 
 
+LineageEdgeType = Literal[
+    "derives_from", "reproduces", "contradicts", "compared_to"
+]
+
+
+class LineageEdge(BaseModel):
+    """L2 append-only lineage 엣지 — evidence 간 관계 (R10: TC envelope 소유).
+
+    forward-compat 슬롯: matchmaker는 v0.1엔 안 읽음(저장만). v0.2에서
+    정보이득 reranker가 입력 추가.
+    """
+
+    model_config = ConfigDict(extra="forbid")
+
+    type: LineageEdgeType
+    target_evidence_id: str
+    metadata: dict[str, Any] | None = None
+
+
 class Evidence(BaseModel):
     """TC Evidence envelope — pcq run_record를 감싸는 R9 wrapper.
 
-    Boundary (R10): evidence_id/tier/outreach_origin/synthetic_source =
+    Boundary (R10): evidence_id/tier/outreach_origin/synthetic_source/lineage =
     TC envelope 전용. 그 외는 pcq_record 안.
     """
 
@@ -164,6 +183,10 @@ class Evidence(BaseModel):
     tier: Tier
     outreach_origin: Outreach
     synthetic_source: SyntheticSource | None = None
+    lineage: list[LineageEdge] | None = Field(
+        default=None,
+        description="L2 lineage 엣지 (R10 TC 소유, forward-compat — v0.1 매치메이커는 미사용)",
+    )
 
     pcq_record: PcqRecord = Field(
         default_factory=PcqRecord,

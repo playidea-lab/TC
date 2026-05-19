@@ -109,6 +109,26 @@ async def ingest_evidence(
             detail=f"schema 검증 실패: {exc}",
         ) from exc
 
+    # 3.5. lineage 검증 (LE1): self-loop·target 존재성. type/형식은 Pydantic이 처리.
+    for edge in evidence.lineage or []:
+        if edge.target_evidence_id == evidence.evidence_id:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=(
+                    f"lineage self-loop 금지: source==target "
+                    f"({edge.target_evidence_id!r})"
+                ),
+            )
+        target = await store.get_by_id(edge.target_evidence_id)
+        if target is None:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=(
+                    f"lineage target_evidence_id 부재: "
+                    f"{edge.target_evidence_id!r}"
+                ),
+            )
+
     # 4. 저장
     try:
         await store.insert(evidence)
