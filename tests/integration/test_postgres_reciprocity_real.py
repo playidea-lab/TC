@@ -21,10 +21,8 @@ pytestmark = requires_db
 
 
 def _record(evidence_id: str, *, tier: str = "real") -> dict:
-    rec = {
-        "evidence_id": evidence_id,
-        "tier": tier,
-        "outreach_origin": "external",
+    """pcq 2.x envelope 형식."""
+    pcq_record = {
         "intent": {"goal": "exploration", "expected_baseline": None, "tolerance": None},
         "data_fingerprint": {
             "modality": "tabular",
@@ -35,23 +33,25 @@ def _record(evidence_id: str, *, tier: str = "real") -> dict:
         "config": {"recipe_id": "lightgbm"},
         "metrics": {"AUC": 0.85},
         "worker_spec": {"cpu_cores": 32, "ram_gb": 64, "has_gpu": True},
-        "attribution": {
-            "contributor_id": None,
-            "content_hash": "",
-            "created_at": datetime.now(UTC).isoformat(),
-            "pcq_version": "2.0.0",
-        },
+        "attribution": {"operator": None, "signature": None},
+        "contract_version": "2.0",
+    }
+    pcq_record["attribution"]["content_hash"] = compute_content_hash(pcq_record)
+    envelope = {
+        "evidence_id": evidence_id,
+        "tier": tier,
+        "outreach_origin": "external",
         "synthetic_source": None,
+        "pcq_record": pcq_record,
     }
     if tier == "synthetic":
-        rec["synthetic_source"] = {
+        envelope["synthetic_source"] = {
             "source_model": "gemini-2.5-flash",
             "prompt_hash": "sha256:x",
             "generated_at": datetime.now(UTC).isoformat(),
             "verifier": None,
         }
-    rec["attribution"]["content_hash"] = compute_content_hash(rec)
-    return rec
+    return envelope
 
 
 async def _seed(

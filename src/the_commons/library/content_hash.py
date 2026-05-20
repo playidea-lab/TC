@@ -1,12 +1,17 @@
-"""evidence content hash 계산.
+"""evidence content hash — *두 API*, *다른 책임*.
 
-pcq 2.x 정본(`docs/vendor/pcq/`, pcq commit 5e86bee의
-`build_integrity_object`)을 byte-for-byte 미러한다 — cross-impl 재현성이
-거버넌스 게이트·corpus export의 토대다.
+`compute_integrity` / `verify_integrity` (pcq R9 envelope, *indent=2 canonical*)
+  pcq v4.10.0 정본 `build_integrity_object`(src/pcq/contract.py:2087-2092)와
+  byte-for-byte 미러. 13 leaf allowlist + universal absent-leaf drop. cross-impl
+  재현성이 거버넌스 게이트·corpus export 무결성의 토대.
 
-- 신규 정본 API: `compute_integrity` / `verify_integrity` (pcq_record 대상).
-- 구 API `compute_content_hash` / `verify_content_hash` 는 Stage 2에서
-  envelope·호출부 마이그레이션과 함께 제거 예정. 그때까지 잔존(호출부 불변).
+`compute_content_hash` / `verify_content_hash` (TC NDJSON corpus, *compact canonical*)
+  `attribution.content_hash` 필드 검증 + corpus export NDJSON 한 줄 직렬화. 단일
+  record 변조 검출용. `compute_integrity`와는 *다른 canonical form* (compact
+  separators) 사용하므로 두 hash는 *byte-divergent* — 통합 불가, 별도 책임.
+
+(이전 docstring의 "Stage 2 제거" 메모는 오류였음 — 두 API 의도·책임 다름이
+실측 검증됨.)
 """
 
 import hashlib
@@ -105,7 +110,12 @@ def verify_integrity(
 
 
 def compute_content_hash(record: dict[str, Any]) -> str:
-    """canonical JSON 직렬화 → SHA256 hex digest.
+    """TC NDJSON corpus용 *compact* canonical SHA256 (책임: attribution.content_hash 검증).
+
+    `compute_integrity`와는 *다른 책임/canonical form* — 통합 불가:
+    - indent: 없음(compact, separators=",:"), `compute_integrity`는 indent=2
+    - 대상: record 전체(_strip_content_hash 후), `compute_integrity`는 13 leaf allowlist
+    - 용도: `attribution.content_hash` 필드 변조 검출 + NDJSON 한 줄 export
 
     Args:
         record: pcq 2.x evidence record. `attribution.content_hash` 키가

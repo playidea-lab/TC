@@ -1,7 +1,6 @@
 """lineage forward-compat — envelope.lineage 수용·검증·저장 (matchmaker는 안 읽음)."""
 
 from collections.abc import AsyncIterator
-from datetime import UTC, datetime
 
 import pytest
 from fastapi.testclient import TestClient

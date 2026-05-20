@@ -23,10 +23,8 @@ def _record(
     metric: float = 0.85,
     intent_goal: str = "exploration",
 ) -> dict:
-    rec = {
-        "evidence_id": evidence_id,
-        "tier": tier,
-        "outreach_origin": "external",
+    """pcq 2.x envelope 형식 — Evidence{envelope-owned} + pcq_record{...}."""
+    pcq_record = {
         "intent": {
             "goal": intent_goal,
             "expected_baseline": None,
@@ -41,23 +39,25 @@ def _record(
         "config": {"recipe_id": "lightgbm"},
         "metrics": {"AUC": metric},
         "worker_spec": {"cpu_cores": 32, "ram_gb": 64, "has_gpu": True},
-        "attribution": {
-            "contributor_id": None,
-            "content_hash": "",
-            "created_at": datetime.now(UTC).isoformat(),
-            "pcq_version": "2.0.0",
-        },
+        "attribution": {"operator": None, "signature": None},
+        "contract_version": "2.0",
+    }
+    pcq_record["attribution"]["content_hash"] = compute_content_hash(pcq_record)
+    envelope = {
+        "evidence_id": evidence_id,
+        "tier": tier,
+        "outreach_origin": "external",
         "synthetic_source": None,
+        "pcq_record": pcq_record,
     }
     if tier == "synthetic":
-        rec["synthetic_source"] = {
+        envelope["synthetic_source"] = {
             "source_model": "gemini-flash-2.5",
             "prompt_hash": "sha256:x",
             "generated_at": datetime.now(UTC).isoformat(),
             "verifier": None,
         }
-    rec["attribution"]["content_hash"] = compute_content_hash(rec)
-    return rec
+    return envelope
 
 
 async def test_insert_and_get_real_evidence(
@@ -102,7 +102,9 @@ async def test_synthetic_attribution_check_constraint(
     rec = _record(evidence_id="ev-it-syn", tier="synthetic")
     # Pydantic 통과 후 synthetic_source 강제 제거 (DB 단에서만 reject 되는지 확인)
     rec["synthetic_source"] = None
-    rec["attribution"]["content_hash"] = compute_content_hash(rec)
+    rec["pcq_record"]["attribution"]["content_hash"] = compute_content_hash(
+        rec["pcq_record"]
+    )
     ev = Evidence.model_validate(rec)
 
     with pytest.raises(psycopg.errors.CheckViolation):

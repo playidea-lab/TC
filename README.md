@@ -521,9 +521,9 @@ built it.
 
 | Component | State |
 |---|---|
-| Format (`pcq`) | Released — `uv add pcq` (1.x). pcq 2.x is a TC-side **proposal** ([`docs/pcq-2.x.md`](docs/pcq-2.x.md)), **not canonical** — canonical 2.x is defined by pcq `spec/` and vendored by TC (unresolved: `content_hash` vs v4.4 `attribution` key collision). |
+| Format (`pcq`) | v4.10.0 released — TC vendors canonical spec from [pcq `spec/SPEC.md`](https://github.com/playidea-lab/pcq/blob/main/spec/SPEC.md). Reproducibility Pack (`code` / `seeds` / `data_ref`) accepted from v0.1. |
 | Press (`cq`) | Operating — PI Lab managed |
-| **Library (`The Commons`)** | **v0.1 in development — backend scaffolding complete, 184 tests passing** |
+| **Library (`The Commons`)** | **v0.1 — code-level complete, 340 unit tests green, deployment pending** |
 
 What exists now (private repo, alpha):
 

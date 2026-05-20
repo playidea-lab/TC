@@ -1,6 +1,5 @@
 """실제 pgvector cosine search 검증."""
 
-from datetime import UTC, datetime
 
 import psycopg
 import pytest_asyncio
@@ -22,10 +21,8 @@ def _record_with_vector_marker(
     evidence_id: str,
     metric: float,
 ) -> dict:
-    rec = {
-        "evidence_id": evidence_id,
-        "tier": "real",
-        "outreach_origin": "external",
+    """pcq 2.x envelope 형식."""
+    pcq_record = {
         "intent": {
             "goal": "exploration",
             "expected_baseline": None,
@@ -40,16 +37,17 @@ def _record_with_vector_marker(
         "config": {"recipe_id": "lightgbm"},
         "metrics": {"AUC": metric},
         "worker_spec": {"cpu_cores": 32, "ram_gb": 64, "has_gpu": True},
-        "attribution": {
-            "contributor_id": None,
-            "content_hash": "",
-            "created_at": datetime.now(UTC).isoformat(),
-            "pcq_version": "2.0.0",
-        },
-        "synthetic_source": None,
+        "attribution": {"operator": None, "signature": None},
+        "contract_version": "2.0",
     }
-    rec["attribution"]["content_hash"] = compute_content_hash(rec)
-    return rec
+    pcq_record["attribution"]["content_hash"] = compute_content_hash(pcq_record)
+    return {
+        "evidence_id": evidence_id,
+        "tier": "real",
+        "outreach_origin": "external",
+        "synthetic_source": None,
+        "pcq_record": pcq_record,
+    }
 
 
 @pytest_asyncio.fixture

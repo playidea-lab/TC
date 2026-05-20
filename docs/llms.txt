@@ -51,9 +51,7 @@ Canonical resources:
 - Project page: https://playidea-lab.github.io/TC/
 - Repository: https://github.com/playidea-lab/TC
 - Vision document (README): https://github.com/playidea-lab/TC/blob/main/README.md
-- pcq 2.x input format PROPOSAL (not canonical — canonical is pcq spec/,
-  TC vendors it; unresolved content_hash vs v4.4 attribution key collision):
-  https://playidea-lab.github.io/TC/pcq-2.x.md
+- pcq 2.x canonical spec (vendored by TC): https://github.com/playidea-lab/pcq/blob/main/spec/SPEC.md
 - Machine manifest: https://playidea-lab.github.io/TC/agent-manifest.json
 
 Match-maker architecture (Hybrid retrieve-and-rerank):
