@@ -112,6 +112,18 @@ Tech stack:
 - structlog JSON logging, request-id middleware, token-bucket rate limit,
   Gemini daily cost ceiling, body-size limit, OWASP baseline headers.
 
+On reproducibility (R8 anti-overclaim):
+
+"pcq makes evidence reproducible, not execution-attested."
+
+The pcq Reproducibility Pack (code / seeds / data_ref, see pcq SPEC.md at
+https://github.com/playidea-lab/pcq/blob/main/spec/SPEC.md) records *what
+code, seeds, and data were used* in a content-addressed form. It does NOT
+prove the recorded code actually ran to produce the recorded outputs —
+causal attestation (TEE quotes, SLSA, sigstore) is a separate substrate The
+Commons does not currently consume. Match-maker decisions on promote /
+contradicts treat reproduction as signal, not proof.
+
 Known v0.1 limitations (honest disclosure — v0.2 cycles):
 
 - L2 immutability is policy-level, not DB-enforced. reciprocity_event,
@@ -126,6 +138,15 @@ Known v0.1 limitations (honest disclosure — v0.2 cycles):
 - lineage_edge (derives_from, reproduces, contradicts, compared_to) is
   accepted and stored from v0.1 but the match-maker does not read it yet
   (forward-compat reservation; v0.2 activates lineage-aware ranking).
+- pcq Reproducibility Pack (code/seeds/data_ref) is accepted, stored, and
+  integrity-hashed from v0.1 but the match-maker does not consume it for
+  ranking yet (v0.2 reproduce-verify before promote: matching
+  content_sha256 ⇒ promote signal, mismatch ⇒ contradicts event;
+  trigger/sampling/tolerance are TC own design).
+- PHI-stripped matchmaker policy absent — when data_ref is present with
+  content_sha256=None (PHI dual-gate), the record is hash-identical to one
+  where data_ref is fully absent. v0.2 marks such records as
+  "reproduce-verify not possible" via presence inspection of data_ref.uri.
 
 Agent rule:
 

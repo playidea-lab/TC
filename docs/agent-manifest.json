@@ -14,8 +14,16 @@
       "L2 immutability is policy-level, not DB-enforced (reciprocity_event/retirement_audit/lineage_edge append-only by convention; v0.2 ops cycle)",
       "Operator audit trail absent — PI Lab mutations policy-permitted; detection limited to corpus-export round-trip release gate (separate governance-honesty cycle)",
       "Embedding stale auto-recompute absent — embedding_template_ver tracks but a model bump leaves prior embeddings until re-ingest (v0.2)",
-      "lineage_edge (derives_from/reproduces/contradicts/compared_to) stored from v0.1 but match-maker does not read it yet (forward-compat; v0.2 activates lineage-aware ranking)"
-    ]
+      "lineage_edge (derives_from/reproduces/contradicts/compared_to) stored from v0.1 but match-maker does not read it yet (forward-compat; v0.2 activates lineage-aware ranking)",
+      "pcq Reproducibility Pack (code/seeds/data_ref) accepted/stored/integrity-hashed from v0.1 but match-maker does not consume for ranking yet (v0.2 reproduce-verify before promote: matching content_sha256 -> promote signal, mismatch -> contradicts event)",
+      "PHI-stripped matchmaker policy absent — data_ref present with content_sha256=None is hash-identical to data_ref absent (PHI dual-gate); v0.2 marks via data_ref.uri presence inspection",
+      "intent.tolerance is opinion-shaped — v0.2 reframing candidate (alongside pcq next cycle) to stochastic variance fact for reproduce-verify integration"
+    ],
+    "reproducibility_claim": {
+      "canonical_phrase": "pcq makes evidence reproducible, not execution-attested.",
+      "scope": "pcq Reproducibility Pack (code/seeds/data_ref) records WHAT code, seeds, and data were used in content-addressed form. It does NOT prove the recorded code actually ran to produce the recorded outputs — causal attestation (TEE/SLSA/sigstore) is a separate substrate The Commons does not currently consume. Match-maker treats reproduction as signal, not proof.",
+      "spec_link": "https://github.com/playidea-lab/pcq/blob/main/spec/SPEC.md"
+    }
   },
   "license": "Apache-2.0",
   "organization": {

@@ -16,6 +16,8 @@ from typing import Any
 HASH_ALGO = "sha256"
 
 # pcq 정본 미러 — src/pcq/contract.py:_INTEGRITY_HASHED_FIELDS (순서 유지).
+# v4.10.0 Reproducibility Pack: code.content_sha256, code.scope, seeds,
+# data_ref.content_sha256 추가.
 _INTEGRITY_HASHED_FIELDS: list[str] = [
     "intent",
     "config",
@@ -26,10 +28,21 @@ _INTEGRITY_HASHED_FIELDS: list[str] = [
     "attribution.committer",
     "attribution.operator",
     "contract_version",
+    "code.content_sha256",
+    "code.scope",
+    "seeds",
+    "data_ref.content_sha256",
 ]
 
 # anti-recursion 제외 경로 — integrity 자신·Phase2 예약 signature.
 _EXCLUDED: frozenset[str] = frozenset({"attribution.signature", "integrity"})
+
+# v4.10.0 추가 leaf — None resolve 시 canonical subset에서 drop (PHI dual-gate
+# 의미론: data_ref.content_sha256 stripped과 필드 absent 동일 hash).
+# 기존 9 leaf는 include-None 유지 (pcq 5e86bee golden parity 보존).
+_DROP_ABSENT_LEAVES: frozenset[str] = frozenset(
+    {"code.content_sha256", "code.scope", "seeds", "data_ref.content_sha256"}
+)
 
 
 def _resolve_dotted_path(payload: dict[str, Any], path: str) -> object:
@@ -61,9 +74,14 @@ def compute_integrity(
     """
     base = _INTEGRITY_HASHED_FIELDS if hashed_fields is None else hashed_fields
     fields_to_use = [f for f in base if f not in _EXCLUDED]
-    subset = {
-        path: _resolve_dotted_path(pcq_record, path) for path in fields_to_use
-    }
+    subset: dict[str, object] = {}
+    for path in fields_to_use:
+        value = _resolve_dotted_path(pcq_record, path)
+        # v4.10.0 신규 leaf는 None 시 drop (PHI dual-gate ≡ absent).
+        # 기존 9 leaf는 include-None 유지 (5e86bee golden parity).
+        if value is None and path in _DROP_ABSENT_LEAVES:
+            continue
+        subset[path] = value
     canonical = json.dumps(subset, indent=2, sort_keys=True, default=str)
     digest = hashlib.sha256(canonical.encode("utf-8")).hexdigest()
     return {

@@ -540,6 +540,12 @@ What is **not** yet live: public ingestion endpoint, hosted deployment, the
 mileage/attribution terms, an external onboarding flow. Those are M4 (CQ
 integration) and launch tasks.
 
+**On reproducibility (R8 anti-overclaim):**
+
+> pcq makes evidence reproducible, not execution-attested.
+
+The pcq Reproducibility Pack (`code` / `seeds` / `data_ref`, [pcq SPEC.md](https://github.com/playidea-lab/pcq/blob/main/spec/SPEC.md)) records *what code, seeds, and data were used* in a content-addressed form. It does **not** prove that the recorded code actually ran to produce the recorded outputs — causal attestation (TEE quotes, SLSA provenance, sigstore signatures) is a separate substrate that TC does not currently consume. Match-maker decisions on `promote` / `contradicts` events treat reproduction as a *signal*, not a proof.
+
 **Known v0.1 limitations (정직 표기 — v0.2 정정 대상):**
 - **L2 immutability is policy-level**, not DB-enforced. `reciprocity_event`,
   `retirement_audit`, `lineage_edge` are append-only by convention; no trigger
@@ -552,6 +558,20 @@ integration) and launch tasks.
 - **Embedding staleness has no automatic recompute** trigger. The
   `embedding_template_ver` column tracks the template version, but a model
   bump leaves prior embeddings in place until re-ingest. (v0.2.)
+- **lineage_edge stored but not read by match-maker**. From v0.1 envelope
+  accepts `lineage` (derives_from / reproduces / contradicts / compared_to)
+  and persists to `lineage_edge` table, but ranking does not consume it.
+  (v0.2 lineage-aware ranking.)
+- **Reproducibility Pack stored but not read by match-maker**. From v0.1
+  pcq `code` / `seeds` / `data_ref` are accepted, stored, and integrity-
+  hashed, but match-maker ranking does not consume them. (v0.2 reproduce-
+  verify before promote: matching content_sha256 ⇒ promote signal,
+  mismatch ⇒ contradicts event; trigger/sampling/tolerance TC own design.)
+- **PHI-stripped matchmaker policy absent**. When `data_ref` is present
+  with `content_sha256=None` (PHI dual-gate), the record is hash-identical
+  to one where `data_ref` is fully absent — these are indistinguishable
+  via hash alone. v0.2 marks such records as "reproduce-verify not
+  possible" via presence inspection of `data_ref.uri`.
 
 ---
 

@@ -4,7 +4,8 @@
     "commit": "5e86bee",
     "version": "v4.9.0",
     "generated": "2026-05-19",
-    "source": "pcq.contract.build_integrity_object"
+    "source": "pcq.contract.build_integrity_object",
+    "extended": "v4.10.0 hashed_fields (4 leaf: code.content_sha256, code.scope, seeds, data_ref.content_sha256). content_hash 불변 (신규 leaf None→drop semantics)."
   },
   "vectors": [
     {
@@ -73,7 +74,11 @@
           "attribution.author",
           "attribution.committer",
           "attribution.operator",
-          "contract_version"
+          "contract_version",
+          "code.content_sha256",
+          "code.scope",
+          "seeds",
+          "data_ref.content_sha256"
         ]
       }
     },
@@ -109,7 +114,11 @@
           "attribution.author",
           "attribution.committer",
           "attribution.operator",
-          "contract_version"
+          "contract_version",
+          "code.content_sha256",
+          "code.scope",
+          "seeds",
+          "data_ref.content_sha256"
         ]
       }
     },
@@ -153,7 +162,11 @@
           "attribution.author",
           "attribution.committer",
           "attribution.operator",
-          "contract_version"
+          "contract_version",
+          "code.content_sha256",
+          "code.scope",
+          "seeds",
+          "data_ref.content_sha256"
         ]
       }
     },
@@ -174,7 +187,11 @@
           "attribution.author",
           "attribution.committer",
           "attribution.operator",
-          "contract_version"
+          "contract_version",
+          "code.content_sha256",
+          "code.scope",
+          "seeds",
+          "data_ref.content_sha256"
         ]
       }
     }

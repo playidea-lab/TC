@@ -54,10 +54,16 @@ def test_intent_allows_null_baseline_and_tolerance() -> None:
     assert intent.tolerance is None
 
 
-def test_intent_rejects_extra_fields() -> None:
-    """forbid extra — intent에 모르는 필드 금지."""
-    with pytest.raises(ValidationError):
-        Intent(goal="exploration", weird_field="bad")  # type: ignore[call-arg]
+def test_intent_preserves_extra_fields_extra_allow() -> None:
+    """v4.10.0: Intent extra='allow' — 미지 필드 보존 (R6 additive 본질).
+
+    이전 forbid 의미론은 pcq 미래 cycle마다 TC sync 사이클을 강제했음.
+    extra='allow' 전환으로 unhashed 미지 필드는 __pydantic_extra__에 보존되어
+    model_dump 재직렬화 시 byte-parity 유지 → content_hash mirror 정합 전제.
+    """
+    intent = Intent(goal="exploration", weird_field="future")  # type: ignore[call-arg]
+    assert intent.goal == "exploration"
+    assert intent.model_extra == {"weird_field": "future"}
 
 
 def test_synthetic_source_required_fields() -> None:
