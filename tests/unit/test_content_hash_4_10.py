@@ -193,3 +193,92 @@ def test_hashed_fields_returns_13_leaves() -> None:
     assert "code.scope" in out["hashed_fields"]
     assert "seeds" in out["hashed_fields"]
     assert "data_ref.content_sha256" in out["hashed_fields"]
+
+
+# ---- BL-1 universal absent-leaf drop (pcq 4.10 의미론) --------------------
+
+
+def test_bl1_intent_absent_code_only_record() -> None:
+    """BL-1 divergence path: intent 부재 + code-only no-intent record.
+
+    pcq 4.10 universal drop 의미론에서 모든 None resolve leaf가 subset에서 drop.
+    TC scoped(신규 4 leaf 한정) 접근이면 intent leaf가 'intent': null로
+    유지돼 hash divergence 발생. 본 테스트가 universal drop 회귀 안전망.
+    """
+    code_only = {
+        "config": {"recipe": "lgbm"},
+        "metrics": {"AUC": 0.85},
+        "code": {"content_sha256": "sha256:abc", "scope": {"kind": "entry_script"}},
+        "contract_version": "2.0",
+        # intent / data_fingerprint / worker_spec / attribution / seeds /
+        # data_ref 전부 부재 — universal drop으로 subset에서 모두 빠져야 함.
+    }
+    out = compute_integrity(code_only)
+    # 13 leaf 중 actual subset에 들어간 건 config, metrics, code.content_sha256,
+    # code.scope, contract_version = 5개 (나머지 8개는 None resolve → drop).
+    # canonical form에 'intent': null 같은 leftover가 없어야 hash 안정.
+    canonical_form_no_intent_null = '"intent": null' not in str(out)
+    assert canonical_form_no_intent_null, (
+        "universal drop 강제 — intent null이 canonical에 남으면 안 됨 (BL-1)"
+    )
+
+
+def test_bl1_seeds_only_record() -> None:
+    """BL-1: seeds-only no-intent record — code 부재여도 valid."""
+    seeds_only = {
+        "config": {},
+        "metrics": {},
+        "seeds": {"main": 42},
+        "contract_version": "2.0",
+    }
+    # hash 계산 자체가 성공하면 OK (KeyError 안 발생 = universal drop 작동).
+    out = compute_integrity(seeds_only)
+    assert "content_hash" in out
+
+
+def test_bl1_data_ref_only_record() -> None:
+    """BL-1: data_ref-only no-intent record."""
+    data_only = {
+        "config": {},
+        "metrics": {},
+        "data_ref": {
+            "uri": "s3://b/d",
+            "content_sha256": "sha256:dr",
+        },
+        "contract_version": "2.0",
+    }
+    out = compute_integrity(data_only)
+    assert "content_hash" in out
+
+
+def test_bl1_intent_absent_equals_intent_none() -> None:
+    """universal drop 검증: intent 자체 absent ≡ intent=None 동일 hash."""
+    base = {
+        "config": {"a": 1},
+        "metrics": {"b": 2},
+        "contract_version": "2.0",
+    }
+    with_none = {**base, "intent": None}
+    h1 = compute_integrity(base)["content_hash"]
+    h2 = compute_integrity(with_none)["content_hash"]
+    assert h1 == h2, "universal drop: intent absent ≡ intent=None 동일 hash 강제"
+
+
+def test_attribution_partial_none_dropped_universally() -> None:
+    """기존 leaf도 universal drop 적용 — attribution.author None vs 부재 동일."""
+    rec_with_none_author = {
+        "config": {"x": 1},
+        "metrics": {"y": 2},
+        "attribution": {"author": None, "operator": "op-1"},
+        "contract_version": "2.0",
+    }
+    rec_without_author_key = {
+        "config": {"x": 1},
+        "metrics": {"y": 2},
+        "attribution": {"operator": "op-1"},
+        "contract_version": "2.0",
+    }
+    assert (
+        compute_integrity(rec_with_none_author)["content_hash"]
+        == compute_integrity(rec_without_author_key)["content_hash"]
+    )

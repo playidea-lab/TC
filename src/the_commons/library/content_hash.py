@@ -37,12 +37,11 @@ _INTEGRITY_HASHED_FIELDS: list[str] = [
 # anti-recursion 제외 경로 — integrity 자신·Phase2 예약 signature.
 _EXCLUDED: frozenset[str] = frozenset({"attribution.signature", "integrity"})
 
-# v4.10.0 추가 leaf — None resolve 시 canonical subset에서 drop (PHI dual-gate
-# 의미론: data_ref.content_sha256 stripped과 필드 absent 동일 hash).
-# 기존 9 leaf는 include-None 유지 (pcq 5e86bee golden parity 보존).
-_DROP_ABSENT_LEAVES: frozenset[str] = frozenset(
-    {"code.content_sha256", "code.scope", "seeds", "data_ref.content_sha256"}
-)
+# pcq v4.10.0 build_integrity_object: **모든** 13 leaf에 None resolve 시 drop
+# 의미론 적용 (universal). BL-1 새 패스 — code-only/seeds-only/data_ref-only
+# no-intent record가 hash invariant 유지하기 위함. pcq src/pcq/contract.py:
+# 2087-2092 코드 증거. PHI dual-gate(data_ref.content_sha256 stripped ≡ 필드
+# absent)도 자연 도출.
 
 
 def _resolve_dotted_path(payload: dict[str, Any], path: str) -> object:
@@ -74,14 +73,12 @@ def compute_integrity(
     """
     base = _INTEGRITY_HASHED_FIELDS if hashed_fields is None else hashed_fields
     fields_to_use = [f for f in base if f not in _EXCLUDED]
-    subset: dict[str, object] = {}
-    for path in fields_to_use:
-        value = _resolve_dotted_path(pcq_record, path)
-        # v4.10.0 신규 leaf는 None 시 drop (PHI dual-gate ≡ absent).
-        # 기존 9 leaf는 include-None 유지 (5e86bee golden parity).
-        if value is None and path in _DROP_ABSENT_LEAVES:
-            continue
-        subset[path] = value
+    # pcq 4.10 universal absent-leaf drop — 모든 leaf에 동일 filter.
+    subset: dict[str, object] = {
+        p: v
+        for p in fields_to_use
+        if (v := _resolve_dotted_path(pcq_record, p)) is not None
+    }
     canonical = json.dumps(subset, indent=2, sort_keys=True, default=str)
     digest = hashlib.sha256(canonical.encode("utf-8")).hexdigest()
     return {

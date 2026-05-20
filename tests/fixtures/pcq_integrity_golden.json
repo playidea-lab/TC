@@ -5,7 +5,10 @@
     "version": "v4.9.0",
     "generated": "2026-05-19",
     "source": "pcq.contract.build_integrity_object",
-    "extended": "v4.10.0 hashed_fields (4 leaf: code.content_sha256, code.scope, seeds, data_ref.content_sha256). content_hash 불변 (신규 leaf None→drop semantics)."
+    "extended": "v4.10.0 hashed_fields (4 leaf: code.content_sha256, code.scope, seeds, data_ref.content_sha256). content_hash 불변 (신규 leaf None→drop semantics).",
+    "semantics_version": "pcq v4.10.0 universal absent-leaf drop",
+    "regenerated_at": "2026-05-20T11:30:00+09:00",
+    "regenerated_reason": "5e86bee include-None semantics → 4.10 universal drop semantics. 1x_legacy/null_intent/minimal 케이스에서 hash 변화 (BL-1 divergence path가 expose됨)."
   },
   "vectors": [
     {
@@ -104,7 +107,7 @@
         }
       },
       "expected_integrity": {
-        "content_hash": "sha256:8346cc9471dc5ebadea3003f6bde39f0ab3416d5abba168b52a8142f7243d309",
+        "content_hash": "sha256:6affd157a8fe16f72a8714a51c1c23c3b01195d07da1cac3a1858bfe7da62d37",
         "hashed_fields": [
           "intent",
           "config",
@@ -152,7 +155,7 @@
         "contract_version": "2.0"
       },
       "expected_integrity": {
-        "content_hash": "sha256:1dad774adee408103a9bf4803d7eeb33aef36e4c9dacd87c18f05f0b02dc5744",
+        "content_hash": "sha256:626e7db1d207ba8a9e307c6156c89de415be1582f0ee308b646987c823b1b2b7",
         "hashed_fields": [
           "intent",
           "config",
@@ -177,7 +180,7 @@
         "metrics": {}
       },
       "expected_integrity": {
-        "content_hash": "sha256:c9fa881b2d0db949940195d4444869964ebe479c178a2e9e46d1b8d7e1ebc042",
+        "content_hash": "sha256:fe39bd97257a7e3ce832fb07a3526cd4d12143c6643430d94bd452813b6d72ab",
         "hashed_fields": [
           "intent",
           "config",

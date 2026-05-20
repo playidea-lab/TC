@@ -1,7 +1,0 @@
-{
-  "steps": ["plan", "run", "finish"],
-  "current": 0,
-  "auto": true,
-  "source": "pi",
-  "idea_slug": "the-commons-pcq-2.x-reproducibility-pack-vendoring"
-}
