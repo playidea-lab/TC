@@ -134,13 +134,17 @@ def issue_dev_jwt(priv_path: Path) -> str:
 
 
 def run_training(
-    train_script: Path, next_config: dict[str, Any]
+    train_script: Path, next_config: dict[str, Any], *, max_epochs: int = 3
 ) -> tuple[dict[str, Any], bool]:
     """train.py를 subprocess로 실행. (metrics_dict, success) 반환.
 
     next_config의 lr/batch_size/epochs/seed를 CLI args로 전달. 그 외 key는 무시
     (v1: train_mnist.py가 받는 인자가 고정). stdout에서 @key=value 라인 누적 → 메트릭.
     실패 시 metrics에 failed:true 마커 + exit_code.
+
+    PoC 속도 가드: explore 분기 LLM이 epochs=20 같은 큰 값을 제안하면 CPU MNIST가
+    분 단위로 느려진다. max_epochs로 cap (실행값만 cap, envelope.config는 원본 유지해
+    "LLM이 무엇을 제안했나"는 보존).
     """
     # --with torch/torchvision: 로컬 host(노트북)에서 TheCommons venv엔 torch가 없으므로
     # uv ad-hoc 격리 환경에 주입. cq 워커로 교체되면 이 cmd 전체가 cq 디스패치로 대체된다.
@@ -159,7 +163,7 @@ def run_training(
         "--batch_size",
         str(next_config.get("batch_size", 128)),
         "--epochs",
-        str(next_config.get("epochs", 1)),
+        str(min(int(next_config.get("epochs", 1) or 1), max_epochs)),
         "--seed",
         str(next_config.get("seed", 42)),
     ]
@@ -312,17 +316,26 @@ def call_recommend(
 
 def call_ingest(
     client: httpx.Client, token: str, tc_url: str, envelope: dict[str, Any]
-) -> dict[str, Any]:
-    r = client.post(
-        f"{tc_url}/ingest",
-        json={"evidence": envelope},
-        headers=_auth_headers(token),
-        timeout=30.0,
-    )
+) -> bool:
+    """ingest 시도. 성공 True, 실패 False (예외로 폐루프를 죽이지 않는다 — E13 정합).
+
+    한 round의 ingest 실패가 무한 폐루프 전체를 멈추면 안 된다. 실패는 경고만 남기고
+    다음 round로 진행 — 자율 루프의 robustness가 단발 성공보다 중요.
+    """
+    try:
+        r = client.post(
+            f"{tc_url}/ingest",
+            json={"evidence": envelope},
+            headers=_auth_headers(token),
+            timeout=30.0,
+        )
+    except httpx.HTTPError as exc:
+        print(f"  ⚠ /ingest {envelope['evidence_id']} 네트워크 오류: {exc}", flush=True)
+        return False
     if r.status_code >= 400:
         print(f"  ⚠ /ingest {envelope['evidence_id']} → {r.status_code}: {r.text[:300]}", flush=True)
-    r.raise_for_status()
-    return r.json()
+        return False
+    return True
 
 
 # ----------------------------------------------------------------------------
@@ -379,6 +392,12 @@ def main() -> int:
     parser.add_argument("--jwt-priv", type=Path, default=DEFAULT_JWT_PRIV)
     parser.add_argument("--train-script", type=Path, default=DEFAULT_TRAIN_SCRIPT)
     parser.add_argument("--sleep-between", type=float, default=0.0, help="round 간 sleep (sec)")
+    parser.add_argument(
+        "--max-epochs",
+        type=int,
+        default=3,
+        help="PoC 속도 가드 — 실제 train epochs cap (envelope.config는 원본 유지)",
+    )
     args = parser.parse_args()
 
     state = LoopState.load(args.state_file)
@@ -439,7 +458,9 @@ def main() -> int:
             print(f"  ← recommend: recipe={recipe_id} branch={branch} next_config={next_config}", flush=True)
 
             # 2. train
-            metrics, ok = run_training(args.train_script, next_config)
+            metrics, ok = run_training(
+                args.train_script, next_config, max_epochs=args.max_epochs
+            )
             print(f"  ← train: ok={ok} metrics={metrics}", flush=True)
 
             # 3. envelope build (분기별 lineage 타입)
@@ -467,8 +488,13 @@ def main() -> int:
                 lineage_target=lineage_target,
             )
 
-            # 4. ingest
-            call_ingest(client, token, args.tc_url, envelope)
+            # 4. ingest — 실패해도 폐루프는 계속 (다음 round로)
+            ingested = call_ingest(client, token, args.tc_url, envelope)
+            if not ingested:
+                print(f"  ↷ ingest 실패 → state 갱신 없이 다음 round", flush=True)
+                if args.sleep_between > 0:
+                    time.sleep(args.sleep_between)
+                continue
             print(f"  → ingest: {evidence_id}", flush=True)
 
             # 5. state 갱신
