@@ -29,6 +29,11 @@ class Settings(BaseSettings):
     gemini_embedding_model: str = Field(default="gemini-embedding-2")
     gemini_reranker_model: str = Field(default="gemini-2.5-flash")
 
+    # OpenAI — generation(synthesizer + infogain prior)용. Gemini quota 회피.
+    # embedding은 차원 호환 위해 Gemini 유지 (전환 시 corpus 전체 re-embed 필요).
+    openai_api_key: str = Field(default="", description="OpenAI API key")
+    openai_model: str = Field(default="gpt-4o-mini")
+
     # CQ JWT
     cq_jwt_public_key_path: str = Field(default="", description="CQ가 발행한 JWT 검증용 공개키")
     cq_jwt_issuer: str = Field(default="cq.pilab.kr")

@@ -13,6 +13,7 @@ from threading import Lock
 PRICING_USD_PER_M_TOKEN: dict[str, dict[str, float]] = {
     "gemini-embedding-2": {"input": 0.10, "output": 0.0},
     "gemini-2.5-flash": {"input": 0.30, "output": 2.50},
+    "gpt-4o-mini": {"input": 0.15, "output": 0.60},
     # 추가 모델은 여기에 등록
 }
 
