@@ -1,5 +1,7 @@
 """환경변수 기반 설정. Pydantic Settings로 .env 파일 자동 로드."""
 
+from typing import Literal
+
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -45,6 +47,18 @@ class Settings(BaseSettings):
     # 매치메이커
     retrieve_top_k: int = Field(default=20, description="Stage 1 vector retrieve 상위 K개")
     recommend_top_n: int = Field(default=5, description="Stage 2 rerank 후 응답 상위 N개")
+
+    # ε-novelty mix 정책 (cq-tc-autonomous-experiment-loop v1)
+    exploration_policy: Literal["fixed"] = Field(
+        default="fixed",
+        description="v1엔 fixed만. v2부터 corpus_decay/stagnation 등.",
+    )
+    exploration_epsilon: float = Field(
+        default=0.1,
+        ge=0.0,
+        le=1.0,
+        description="ε-novelty mix의 explore 분기 확률. 1-ε는 exploit (infogain→within-recipe LLM).",
+    )
 
     # 로깅
     log_level: str = Field(default="INFO")

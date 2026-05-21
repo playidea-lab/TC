@@ -1,8 +1,8 @@
 """Response composer — rerank 결과 + corpus context를 API 응답 형태로."""
 
 from collections import Counter
-from dataclasses import dataclass
-from typing import Literal
+from dataclasses import dataclass, field
+from typing import Any, Literal
 
 from the_commons.library.models import Evidence
 from the_commons.llm.protocol import RankedCandidate
@@ -31,13 +31,22 @@ class CorpusContext:
 
 @dataclass(frozen=True)
 class ComposedCandidate:
-    """최종 응답 한 항목."""
+    """최종 응답 한 항목.
+
+    v1 (cq-tc-autonomous-experiment-loop)에서 추가:
+    - next_config: ε-novelty mix 정책이 합성한 다음 시도 hyperparam dict.
+      cq가 그대로 받아 학습 실행. cold-start나 기존 호환 클라이언트 위해 optional.
+    - policy: {branch, epsilon, version, wild_card_fired} 메타데이터.
+      envelope.attribution.policy로 박혀 사후 v1→v2 정책 비교의 기준.
+    """
 
     recipe_id: str
     expected_metric: dict[str, float] | None
     evidence_ids: list[str]
     confidence: ConfidenceLabel
     reasoning: str
+    next_config: dict[str, Any] | None = None
+    policy: dict[str, Any] | None = field(default=None)
 
 
 def summarize_corpus(hits: list[RetrievedHit]) -> CorpusContext:
