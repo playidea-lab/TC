@@ -142,9 +142,15 @@ def run_training(
     (v1: train_mnist.py가 받는 인자가 고정). stdout에서 @key=value 라인 누적 → 메트릭.
     실패 시 metrics에 failed:true 마커 + exit_code.
     """
+    # --with torch/torchvision: 로컬 host(노트북)에서 TheCommons venv엔 torch가 없으므로
+    # uv ad-hoc 격리 환경에 주입. cq 워커로 교체되면 이 cmd 전체가 cq 디스패치로 대체된다.
     cmd = [
         "uv",
         "run",
+        "--with",
+        "torch",
+        "--with",
+        "torchvision",
         "python",
         "-u",
         str(train_script),
