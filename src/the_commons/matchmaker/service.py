@@ -218,9 +218,9 @@ class MatchmakerService:
         else:
             # exploit: composed[0]의 recipe_id가 infogain rerank의 top.
             top_recipe = top.recipe_id
-            recipe_evidences = [
-                ev for ev in records if _extract_recipe_id(ev) == top_recipe
-            ]
+            recipe_evidences = await self._fetch_recipe_history(
+                top_recipe, modality=query.data_fingerprint.modality, fallback=records
+            )
             summaries = [
                 EvidenceSummary(
                     evidence_id=ev.evidence_id,
@@ -256,6 +256,40 @@ class MatchmakerService:
             reasoning=proposal.reasoning or top.reasoning,
         )
         return [new_top, *composed[1:]]
+
+    # 한 recipe 이력 조회 상한 — corpus가 작은 PoC엔 충분, 발산 방지
+    _RECIPE_HISTORY_LIMIT = 200
+
+    async def _fetch_recipe_history(
+        self, recipe_id: str, *, modality: str, fallback: list[Evidence]
+    ) -> list[Evidence]:
+        """그 recipe의 전체 시도 이력을 도서관에서 직접 조회.
+
+        retrieve top-K는 query 유사도 기준이라 폐루프가 만든 evidence(query와 modality는
+        같아도 recipe가 흘러가면 임베딩이 멀어짐)를 놓친다. recipe_id로 직접 조회해야
+        within synth가 "이미 이 lr을 N번 시도했다"를 보고 정체를 피한다.
+
+        list_evidence엔 recipe_id 필터가 없으므로 modality로 좁히고 코드에서 필터.
+        조회 실패 시 retrieve records로 graceful degrade.
+        """
+        try:
+            all_ev, _ = await self._store.list_evidence(
+                modality=modality, limit=self._RECIPE_HISTORY_LIMIT, deprecated=False
+            )
+        except Exception as exc:  # noqa: BLE001 — 조회 실패가 추천을 막지 않게
+            logger.warning(
+                "recipe_history_fetch_failed",
+                recipe_id=recipe_id,
+                error=str(exc),
+                fallback="retrieve_records",
+            )
+            all_ev = []
+
+        matched = [ev for ev in all_ev if _extract_recipe_id(ev) == recipe_id]
+        if not matched:
+            # 도서관 조회가 비면 retrieve records의 해당 recipe로 fallback
+            matched = [ev for ev in fallback if _extract_recipe_id(ev) == recipe_id]
+        return matched
 
     async def _fetch_evidence(self, hits: list[RetrievedHit]) -> list[Evidence]:
         """RetrievedHit list → Evidence list (없는 ID는 skip)."""

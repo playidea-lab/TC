@@ -13,6 +13,7 @@ fallback은 마지막 best evidence config 또는 합리적 default 한 점.
 from __future__ import annotations
 
 import json
+import math
 import re
 from dataclasses import dataclass, field
 from typing import Any, Protocol, runtime_checkable
@@ -99,22 +100,43 @@ def _validate_proposal_dict(obj: dict) -> tuple[str, dict, str] | None:
 def _build_within_prompt(
     recipe_id: str, evidences: list[EvidenceSummary], intent: str
 ) -> str:
-    """recipe 안 evidence history + intent를 prompt에 직렬화."""
+    """recipe 안 evidence history + intent를 prompt에 직렬화.
+
+    이미 시도한 distinct config를 '제외 대상'으로 명시해 LLM이 같은 config를 반복
+    제안하는 정체(중복 자기복제)를 막는다.
+    """
     history_lines = [
         f"- {ev.evidence_id}: config={json.dumps(ev.config, ensure_ascii=False)} "
         f"metrics={json.dumps(ev.metrics, ensure_ascii=False)}"
         for ev in evidences
     ]
     history = "\n".join(history_lines) if history_lines else "(없음)"
+    tried_block = "\n".join(
+        f"- {c}" for c in _distinct_config_strs(evidences)
+    ) or "(없음)"
     return (
-        "ML 실험 polkadot recipe 안에서 다음에 시도할 hyperparam을 합성한다.\n"
+        "ML 실험 recipe 안에서 다음에 시도할 hyperparam을 합성한다.\n"
         f"recipe_id: {recipe_id}\n"
         f"intent: {intent}\n"
         f"history:\n{history}\n\n"
-        "위 history를 보고, 이 recipe 안에서 다음 시도할 next_config를 결정한다.\n"
+        f"이미 시도한 config (반드시 이것들과 다른 값 제안):\n{tried_block}\n\n"
+        "next_config는 위 '이미 시도한 config' 중 어느 것과도 동일하면 안 된다. "
+        "history의 metrics 추세를 보고 미탐색 hyperparam 영역을 제안하라.\n"
         'JSON만 출력: {"recipe_id": "<같은 recipe_id>", '
         '"next_config": {<hyperparams>}, "reasoning": "<짧은 근거>"}'
     )
+
+
+def _distinct_config_strs(evidences: list[EvidenceSummary]) -> list[str]:
+    """evidences의 distinct config를 정렬된 JSON 문자열 목록으로 (중복 제거)."""
+    seen: set[str] = set()
+    out: list[str] = []
+    for ev in evidences:
+        s = json.dumps(ev.config, sort_keys=True, ensure_ascii=False)
+        if s not in seen:
+            seen.add(s)
+            out.append(s)
+    return out
 
 
 class WithinRecipeSynthesizer:
@@ -152,12 +174,67 @@ class WithinRecipeSynthesizer:
 
         # LLM이 recipe_id를 바꿔도 우리는 within 분기 — 같은 recipe로 강제.
         _, next_config, reasoning = validated
+        # 도서관 조회 가드: LLM이 이미 시도한 config를 그대로 반복하면(temp=0 정체)
+        # lr을 미탐색 영역으로 밀어 탐색을 강제한다.
+        next_config, reasoning = _avoid_tried_config(
+            next_config, reasoning, evidences
+        )
         return NextConfigProposal(
             recipe_id=recipe_id,
             next_config=next_config,
             reasoning=reasoning,
             evidence_ids=evidence_ids,
         )
+
+
+# explore 강제 시 lr 확장 배수 + 상한 (발산 방지)
+_PERTURB_FACTOR = 1.7
+_LR_MAX = 0.5
+_LR_KEYS = ("lr", "learning_rate")  # recipe마다 lr 키 이름이 다름
+
+
+def _lr_field(cfg: dict[str, Any]) -> tuple[str | None, float | None]:
+    """config에서 lr 계열 키와 값 추출 (lr / learning_rate)."""
+    for k in _LR_KEYS:
+        v = cfg.get(k)
+        if isinstance(v, int | float):
+            return k, float(v)
+    return None, None
+
+
+def _avoid_tried_config(
+    next_config: dict[str, Any],
+    reasoning: str,
+    evidences: list[EvidenceSummary],
+) -> tuple[dict[str, Any], str]:
+    """next_config의 lr이 이미 시도한 lr이면 미탐색 영역으로 밀어 정체를 깬다.
+
+    중복 판정은 lr 값 기준 — 같은 recipe 안에서 같은 lr 반복이 within 분기 자기복제
+    정체의 본질이다. 전체 dict 비교는 키 미세 차이로 빗나가므로 lr에 집중한다.
+    중복이 아니면 원본 그대로.
+    """
+    lr_key, cur_lr = _lr_field(next_config)
+    tried_lrs = [
+        v for ev in evidences if (v := _lr_field(ev.config)[1]) is not None
+    ]
+    if lr_key is None or cur_lr is None or not tried_lrs:
+        return next_config, reasoning  # lr 없음 — perturbation 불가
+
+    if not any(math.isclose(cur_lr, t, rel_tol=1e-6) for t in tried_lrs):
+        return next_config, reasoning  # 미탐색 lr — 그대로
+
+    # 중복 lr → 미탐색 영역으로. 상단 확장이 상한에 막히면 하단 축소.
+    new_lr = min(max(tried_lrs) * _PERTURB_FACTOR, _LR_MAX)
+    if any(math.isclose(new_lr, t, rel_tol=1e-6) for t in tried_lrs) or math.isclose(
+        new_lr, cur_lr, rel_tol=1e-6
+    ):
+        new_lr = min(tried_lrs) / _PERTURB_FACTOR
+    perturbed = dict(next_config)
+    perturbed[lr_key] = new_lr
+    return (
+        perturbed,
+        f"{reasoning} [guard: 중복 lr → {lr_key} 탐색 perturbation {cur_lr}→{new_lr}]",
+    )
 
 
 def _within_fallback(

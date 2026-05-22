@@ -131,6 +131,68 @@ async def test_within_recipe_falls_back_on_wrong_field_types() -> None:
     assert "fallback" in proposal.reasoning.lower()
 
 
+# ---------- WithinRecipe: 이미 시도한 config 제외 (정체 방지) ----------
+
+
+@pytest.mark.asyncio
+async def test_within_prompt_lists_tried_configs() -> None:
+    """프롬프트에 이미 시도한 distinct config가 '제외 대상'으로 명시돼야 한다."""
+    llm = _MockLLM('{"recipe_id":"r","next_config":{"lr":0.05},"reasoning":"x"}')
+    synth = WithinRecipeSynthesizer(llm=llm)
+    evs = [
+        EvidenceSummary(evidence_id="e1", config={"lr": 0.0005}, metrics={"test_acc": 0.96}),
+        EvidenceSummary(evidence_id="e2", config={"lr": 0.0005}, metrics={"test_acc": 0.96}),
+    ]
+    await synth.propose(recipe_id="r", evidences=evs, intent="acc")
+    assert llm.last_prompt is not None
+    # tried config(0.0005)가 명시 + "다른 값" 지시
+    assert "0.0005" in llm.last_prompt
+    assert "시도" in llm.last_prompt  # "이미 시도한" 류 문구
+
+
+@pytest.mark.asyncio
+async def test_within_guard_perturbs_when_llm_repeats_tried_config() -> None:
+    """LLM이 이미 시도한 config를 그대로 반환하면 가드가 lr을 바꿔 탐색 강제."""
+    # evidences에 lr=0.0005만 있고, LLM도 0.0005를 반복 제안
+    llm = _MockLLM('{"recipe_id":"r","next_config":{"lr":0.0005},"reasoning":"또 0.0005"}')
+    synth = WithinRecipeSynthesizer(llm=llm)
+    evs = [
+        EvidenceSummary(evidence_id="e1", config={"lr": 0.0005}, metrics={"test_acc": 0.96}),
+    ]
+    p = await synth.propose(recipe_id="r", evidences=evs, intent="acc")
+    # 가드가 작동해 lr이 0.0005가 아니어야 (탐색 강제)
+    assert p.next_config["lr"] != 0.0005
+    assert "perturb" in p.reasoning.lower() or "탐색" in p.reasoning
+
+
+@pytest.mark.asyncio
+async def test_within_guard_handles_learning_rate_key_and_recipe_id() -> None:
+    """저장 config엔 recipe_id 포함 + learning_rate 키. 정규화 후 중복 판정·perturbation."""
+    # 저장된 evidence config: recipe_id 합쳐짐 + learning_rate 키 (cifar 계열 모사)
+    stored = {"recipe_id": "cifar10-resnet18", "model": "ResNet18", "learning_rate": 0.0005}
+    # LLM이 recipe_id 없이 같은 config 반복
+    llm = _MockLLM(
+        '{"recipe_id":"cifar10-resnet18","next_config":{"model":"ResNet18","learning_rate":0.0005},"reasoning":"또"}'
+    )
+    synth = WithinRecipeSynthesizer(llm=llm)
+    evs = [EvidenceSummary(evidence_id="e1", config=stored, metrics={"test_acc": 0.96})]
+    p = await synth.propose(recipe_id="cifar10-resnet18", evidences=evs, intent="acc")
+    # learning_rate가 0.0005에서 밀려야
+    assert p.next_config["learning_rate"] != 0.0005
+
+
+@pytest.mark.asyncio
+async def test_within_no_perturb_when_llm_proposes_new_config() -> None:
+    """LLM이 미탐색 config를 제안하면 그대로 통과 (가드 미발동)."""
+    llm = _MockLLM('{"recipe_id":"r","next_config":{"lr":0.05},"reasoning":"새 값"}')
+    synth = WithinRecipeSynthesizer(llm=llm)
+    evs = [
+        EvidenceSummary(evidence_id="e1", config={"lr": 0.0005}, metrics={"test_acc": 0.96}),
+    ]
+    p = await synth.propose(recipe_id="r", evidences=evs, intent="acc")
+    assert p.next_config["lr"] == 0.05  # 그대로
+
+
 # ---------- NoveltyRecipeSynthesizer ----------
 
 
