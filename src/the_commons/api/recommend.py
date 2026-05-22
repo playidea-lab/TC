@@ -22,8 +22,8 @@ from the_commons.llm.cost_meter import meter
 from the_commons.llm.gemini import (
     GeminiEmbedding2Provider,
     GeminiFlash25Reranker,
+    GeminiPriorLLM,
 )
-from the_commons.llm.openai import OpenAIChatLLM
 from the_commons.llm.protocol import EmbeddingProvider, LLMReranker
 from the_commons.matchmaker.composer import ComposedCandidate, CorpusContext
 from the_commons.matchmaker.infogain.llm_prior import PriorLLM
@@ -101,10 +101,10 @@ async def get_reranker() -> LLMReranker:
 async def get_infogain_reranker() -> InfoGainReranker:
     """production 정보이득 reranker. test는 dependency_overrides로 교체.
 
-    Gemini 무료 quota 회피 위해 prior LLM을 OpenAI로. meter.record로 비용 보고 —
-    prior 호출도 일일 cost ceiling에 포함 (계측 누락 = ceiling 우회 방지).
+    prior LLM은 Gemini로 통일 (recommend 경로 전체 Gemini — OpenAI 키·quota 비의존).
+    meter.record로 비용 보고 — prior 호출도 일일 cost ceiling에 포함.
     """
-    llm: PriorLLM = OpenAIChatLLM()
+    llm: PriorLLM = GeminiPriorLLM()
     return InfoGainReranker(llm=llm)
 
 
@@ -124,14 +124,15 @@ async def get_exploration_policy() -> ExplorationPolicy:
 
 
 async def get_within_synth() -> WithinRecipeSynthesizer:
-    """exploit 분기 합성기. OpenAI generation (Gemini quota 회피)."""
-    return WithinRecipeSynthesizer(llm=OpenAIChatLLM())
+    """exploit 분기 합성기 — Gemini generation (recommend 경로 Gemini 통일)."""
+    return WithinRecipeSynthesizer(llm=GeminiPriorLLM())
 
 
 async def get_novelty_synth() -> NoveltyRecipeSynthesizer:
-    """explore 분기 합성기 — 웹검색 agentic novelty. web_search/agent 실패 시 단발
-    NoveltyRecipeSynthesizer로 degrade. 반환 타입은 duck-typing(propose 시그니처 동일)."""
-    fallback = NoveltyRecipeSynthesizer(llm=OpenAIChatLLM())
+    """explore 분기 합성기 — Gemini google_search grounding novelty. grounding/파싱
+    실패 시 단발 NoveltyRecipeSynthesizer로 degrade. 반환 타입은 duck-typing(propose
+    시그니처 동일)."""
+    fallback = NoveltyRecipeSynthesizer(llm=GeminiPriorLLM())
     return AgenticNoveltySynthesizer(fallback=fallback)  # type: ignore[return-value]
 
 

@@ -1,23 +1,26 @@
-"""AgenticNoveltySynthesizer — 웹검색을 활용하는 explore 분기 합성기.
+"""AgenticNoveltySynthesizer — Gemini google_search grounding으로 explore 분기 합성.
 
 idea: `.cq/runtime/ideas/cq-tc-agentic-novelty-websearch.md`
 
-단발 NoveltyRecipeSynthesizer가 LLM training cutoff에 갇히는 한계를 넘어, OpenAI
-Responses API의 web_search 빌트인 tool로 최신 기법·SOTA를 실시간 조사한 뒤 corpus
-밖 novelty recipe를 합성한다. NoveltyRecipeSynthesizer와 동일 propose 시그니처라
-DI 교체만으로 ε-novelty mix의 explore 분기를 대체한다.
+단발 NoveltyRecipeSynthesizer가 LLM training cutoff에 갇히는 한계를 넘어, Gemini의
+google_search grounding tool로 최신 기법·SOTA를 실시간 조사한 뒤 corpus 밖 novelty
+recipe를 합성한다. NoveltyRecipeSynthesizer와 동일 propose 시그니처라 DI 교체만으로
+ε-novelty mix의 explore 분기를 대체한다.
 
-RR6 정합: web_search·agent·파싱 실패는 추천을 중단시키지 않고 주입된 단발
+provider는 Gemini로 통일 — recommend 경로(embedding/rerank/prior/synth)가 모두
+Gemini라 OpenAI 키·quota 의존이 없다.
+
+RR6 정합: grounding·파싱 실패는 추천을 중단시키지 않고 주입된 단발
 NoveltyRecipeSynthesizer(fallback)로 degrade한다.
 """
 
 from __future__ import annotations
 
-import json
 from typing import Any
 
 import structlog
-from openai import AsyncOpenAI
+from google import genai
+from google.genai import types as genai_types
 
 from the_commons.llm.cost_meter import meter
 from the_commons.matchmaker.synthesizer import (
@@ -31,12 +34,9 @@ from the_commons.settings import settings
 
 logger: structlog.stdlib.BoundLogger = structlog.get_logger(__name__)
 
-# web_search agent 모델 — gpt-4o 계열이 Responses API web_search tool 지원
-_DEFAULT_AGENT_MODEL = "gpt-4o"
-
 
 def _build_agent_prompt(corpus: list[RecipeStats], intent: str) -> str:
-    """웹검색 agent용 프롬프트 — 최신 기법 조사 + corpus 밖 novelty 합성 지시."""
+    """grounding agent용 프롬프트 — 최신 기법 조사 + corpus 밖 novelty 합성 지시."""
     if corpus:
         recipe_lines = [
             f"- {r.recipe_id}: tries={r.tries} best_{r.metric_name}={r.best_metric}"
@@ -60,26 +60,29 @@ def _build_agent_prompt(corpus: list[RecipeStats], intent: str) -> str:
 
 
 def _extract_sources(response: Any) -> list[str]:
-    """Responses API 응답에서 web_search url_citation 출처 추출 (best-effort)."""
+    """Gemini 응답의 grounding_metadata에서 출처 URL 추출 (best-effort).
+
+    grounding_chunks[].web.uri 경로. SDK 응답 형태가 변할 수 있어 getattr 체인 +
+    예외 무시 — 출처 추출 실패가 추천을 막지 않게 한다.
+    """
     sources: list[str] = []
     try:
-        for item in getattr(response, "output", []) or []:
-            if getattr(item, "type", None) != "message":
-                continue
-            for content in getattr(item, "content", []) or []:
-                for ann in getattr(content, "annotations", []) or []:
-                    url = getattr(ann, "url", None)
-                    if isinstance(url, str) and url and url not in sources:
-                        sources.append(url)
+        for cand in getattr(response, "candidates", []) or []:
+            gm = getattr(cand, "grounding_metadata", None)
+            for chunk in getattr(gm, "grounding_chunks", []) or []:
+                web = getattr(chunk, "web", None)
+                uri = getattr(web, "uri", None)
+                if isinstance(uri, str) and uri and uri not in sources:
+                    sources.append(uri)
     except Exception:  # noqa: BLE001 — 출처 추출 실패가 추천을 막지 않게
         return sources
     return sources
 
 
 class AgenticNoveltySynthesizer:
-    """explore 분기 — 웹검색 agent로 최신 기법 조사 후 novelty recipe 합성.
+    """explore 분기 — Gemini grounding으로 최신 기법 조사 후 novelty recipe 합성.
 
-    fallback은 단발 NoveltyRecipeSynthesizer — web_search/agent 실패 시 degrade.
+    fallback은 단발 NoveltyRecipeSynthesizer — grounding/파싱 실패 시 degrade.
     """
 
     def __init__(
@@ -88,10 +91,10 @@ class AgenticNoveltySynthesizer:
         fallback: NoveltyRecipeSynthesizer,
         model: str | None = None,
     ) -> None:
-        if not settings.openai_api_key:
-            raise RuntimeError("OPENAI_API_KEY 미설정")
-        self._client = AsyncOpenAI(api_key=settings.openai_api_key)
-        self._model = model or _DEFAULT_AGENT_MODEL
+        if not settings.google_api_key:
+            raise RuntimeError("GOOGLE_API_KEY 미설정")
+        self._client = genai.Client(api_key=settings.google_api_key)
+        self._model = model or settings.gemini_reranker_model
         self._fallback = fallback
 
     async def propose(
@@ -100,10 +103,11 @@ class AgenticNoveltySynthesizer:
         prompt = _build_agent_prompt(corpus_recipes, intent)
 
         try:
-            response = await self._client.responses.create(
-                model=self._model,
-                tools=[{"type": "web_search"}],
-                input=prompt,
+            config = genai_types.GenerateContentConfig(
+                tools=[genai_types.Tool(google_search=genai_types.GoogleSearch())]
+            )
+            response = self._client.models.generate_content(
+                model=self._model, contents=prompt, config=config
             )
         except Exception as exc:  # noqa: BLE001 — RR6: 단발 novelty로 degrade
             logger.warning(
@@ -116,7 +120,7 @@ class AgenticNoveltySynthesizer:
                 corpus_recipes=corpus_recipes, intent=intent
             )
 
-        text = getattr(response, "output_text", "") or ""
+        text = getattr(response, "text", "") or ""
         sources = _extract_sources(response)
         _meter_usage(response, self._model)
 
@@ -142,11 +146,11 @@ class AgenticNoveltySynthesizer:
 
 
 def _meter_usage(response: Any, model: str) -> None:
-    """Responses API usage를 cost_meter에 보고 (best-effort)."""
+    """Gemini usage_metadata를 cost_meter에 보고 (best-effort)."""
     try:
-        usage = getattr(response, "usage", None)
-        in_tok = getattr(usage, "input_tokens", 0) or 0
-        out_tok = getattr(usage, "output_tokens", 0) or 0
+        usage = getattr(response, "usage_metadata", None)
+        in_tok = getattr(usage, "prompt_token_count", 0) or 0
+        out_tok = getattr(usage, "candidates_token_count", 0) or 0
         meter.record(
             model=model, operation="agentic_novelty", input_tokens=in_tok, output_tokens=out_tok
         )

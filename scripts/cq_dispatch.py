@@ -230,7 +230,9 @@ def call_recommend(client: httpx.Client, token: str, tc_url: str, spec: Experime
     body: dict[str, Any] = {"query": query, "force_explore": force_explore}
     if round_id:
         body["round_id"] = round_id
-    r = client.post(f"{tc_url}/recommend", json=body, headers=_headers(token), timeout=120.0)
+    # recommend는 infogain prior(recipe별 N회) + explore grounding(AFC 다중)로 Gemini를
+    # 직렬 호출해 느리다 → 넉넉한 timeout. 성능 최적화(병렬/캐시)는 별도 과제.
+    r = client.post(f"{tc_url}/recommend", json=body, headers=_headers(token), timeout=300.0)
     r.raise_for_status()
     return r.json()
 
