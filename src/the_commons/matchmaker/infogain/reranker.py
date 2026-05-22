@@ -22,7 +22,7 @@ from the_commons.matchmaker.composer import _extract_recipe_id
 from the_commons.matchmaker.infogain.llm_prior import (
     WEAK_DEFAULT_PRIOR,
     PriorLLM,
-    llm_beta_prior,
+    llm_beta_priors_batch,
 )
 from the_commons.matchmaker.infogain.normalize import normalize_neighborhood
 from the_commons.matchmaker.infogain.posterior import BetaPosterior
@@ -53,26 +53,27 @@ class InfoGainReranker:
         for idx, ev in enumerate(records):
             groups.setdefault(_extract_recipe_id(ev), []).append(idx)
 
-        # recipe별 사후 fit
+        # 저데이터 recipe(real < threshold)만 LLM prior가 필요 → 1회 배치 호출로
+        # 직렬 N회를 회피한다. 고데이터 recipe는 likelihood 우세라 weak default.
+        low_data = [
+            recipe_id
+            for recipe_id, idxs in groups.items()
+            if sum(1 for i in idxs if records[i].tier == "real")
+            < settings.retirement_real_threshold
+        ]
+        priors = await llm_beta_priors_batch(low_data, query, llm=self._llm)
+
+        # recipe별 사후 fit — 배치 결과에 없거나 고데이터면 weak default
         recipe_post: dict[str, BetaPosterior] = {}
         recipe_gain: dict[str, float] = {}
         for recipe_id, idxs in groups.items():
             members = [records[i] for i in idxs]
-            real_count = sum(1 for ev in members if ev.tier == "real")
             obs = [
                 scores[ev.evidence_id]
                 for ev in members
                 if ev.evidence_id in scores
             ]
-            if real_count < settings.retirement_real_threshold:
-                a0, b0 = await llm_beta_prior(
-                    recipe_id,
-                    query,
-                    real_count=real_count,
-                    llm=self._llm,
-                )
-            else:
-                a0, b0 = WEAK_DEFAULT_PRIOR
+            a0, b0 = priors.get(recipe_id, WEAK_DEFAULT_PRIOR)
             post = BetaPosterior(a0, b0).update(obs)
             recipe_post[recipe_id] = post
             recipe_gain[recipe_id] = post.expected_info_gain()

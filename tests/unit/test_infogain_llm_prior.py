@@ -4,6 +4,7 @@
 from the_commons.matchmaker.infogain.llm_prior import (
     WEAK_DEFAULT_PRIOR,
     llm_beta_prior,
+    llm_beta_priors_batch,
 )
 from the_commons.matchmaker.infogain.posterior import BetaPosterior
 from the_commons.settings import settings
@@ -80,3 +81,45 @@ async def test_extreme_values_are_clamped_weak() -> None:
 async def test_weak_default_is_uniform_prior() -> None:
     assert WEAK_DEFAULT_PRIOR == (1.0, 1.0)
     assert BetaPosterior(*WEAK_DEFAULT_PRIOR).mean() == 0.5
+
+
+# ---------- 배치 prior (직렬 N회 → 1회) ----------
+
+
+async def test_batch_prior_parses_multiple_recipes_in_one_call() -> None:
+    llm = _FixedLLM(
+        '{"rf": {"alpha": 2.0, "beta": 3.0}, "xgb": {"alpha": 1.5, "beta": 1.5}}'
+    )
+    out = await llm_beta_priors_batch(["rf", "xgb"], "ctx", llm=llm)
+    assert set(out.keys()) == {"rf", "xgb"}
+    assert all(a > 0.0 and b > 0.0 for a, b in out.values())
+    assert llm.called is True  # 1회만 호출
+
+
+async def test_batch_prior_empty_input_skips_llm() -> None:
+    llm = _RaisingLLM()
+    out = await llm_beta_priors_batch([], "ctx", llm=llm)
+    assert out == {}
+    assert llm.called is False  # 빈 입력 → LLM 미호출
+
+
+async def test_batch_prior_missing_recipe_excluded_from_result() -> None:
+    # 응답에 xgb 누락 → 결과에서 빠짐 (호출부가 weak default로 채움)
+    llm = _FixedLLM('{"rf": {"alpha": 2.0, "beta": 2.0}}')
+    out = await llm_beta_priors_batch(["rf", "xgb"], "ctx", llm=llm)
+    assert "rf" in out
+    assert "xgb" not in out
+
+
+async def test_batch_prior_exception_degrades_to_empty() -> None:
+    llm = _RaisingLLM()
+    out = await llm_beta_priors_batch(["rf"], "ctx", llm=llm)
+    assert out == {}  # 예외 → 빈 dict (RR6, 중단 없음)
+
+
+async def test_batch_prior_clamps_extreme_values() -> None:
+    llm = _FixedLLM('{"rf": {"alpha": 99999, "beta": 0.00001}}')
+    out = await llm_beta_priors_batch(["rf"], "ctx", llm=llm)
+    a, b = out["rf"]
+    assert 0.0 < a <= 10.0
+    assert 0.0 < b <= 10.0
