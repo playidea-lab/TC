@@ -63,6 +63,10 @@ class NextConfigProposal:
     reasoning: str
     evidence_ids: list[str] = field(default_factory=list)
     sources: list[str] = field(default_factory=list)
+    # 코드생성 루프(cq-pcq-tc-dental-codegen-loop): 생성된 train.py 전체 + 의존성.
+    # config 기반 합성은 None. cq가 이 코드를 워크스페이스에 배포해 실행한다.
+    generated_code: str | None = None
+    requirements: list[str] = field(default_factory=list)
 
 
 # ---------- 공통 ----------

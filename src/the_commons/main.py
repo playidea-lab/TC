@@ -12,6 +12,7 @@ import structlog
 from fastapi import FastAPI
 
 from the_commons import __version__
+from the_commons.api.codegen import router as codegen_router
 from the_commons.api.evidence import router as evidence_router
 from the_commons.api.health import router as health_router
 from the_commons.api.ingest import router as ingest_router
@@ -86,5 +87,6 @@ app.include_router(health_router)
 app.include_router(ingest_router)
 app.include_router(evidence_router)
 app.include_router(recommend_router)
+app.include_router(codegen_router)
 app.include_router(verdict_router)
 app.include_router(metrics_router)
