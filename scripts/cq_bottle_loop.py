@@ -148,7 +148,7 @@ class CqMcpClient:
         wrapper가 노트북=워커 로컬이므로 cq read_file(NATS, 불안정) 대신 로컬
         파일시스템에서 직접 읽는다 — NATS RPC 우회.
         """
-        p = Path(f"/Users/changmin/.cq/workspace/{job_id}/train_run.log")
+        p = Path(f"/Users/changmin/.cq/workspace/{job_id}/train_err.log")
         try:
             if p.exists():
                 return p.read_text(errors="replace")[-tail_chars:]
@@ -309,8 +309,19 @@ def main() -> int:
 
     state = LoopState.load(STATE_FILE)
     token = issue_jwt()
-    data_dirs = sorted(p.name for p in (Path(DATA_ROOT) / CATEGORY).iterdir()) if (Path(DATA_ROOT) / CATEGORY).is_dir() else [CATEGORY]
-    data_dirs = [f"{CATEGORY}/{d}" for d in data_dirs]
+    # 데이터 구조를 2단계 깊이로 보여줌 (train/good, test/<defects> 등) — 코드가
+    # 데이터 로딩 경로(train/good/*.png)를 정확히 잡게 해 num_samples=0 반복 감소.
+    base = Path(DATA_ROOT) / CATEGORY
+    data_dirs = []
+    if base.is_dir():
+        for sub in sorted(base.iterdir()):
+            if sub.is_dir():
+                children = [c.name for c in sorted(sub.iterdir()) if c.is_dir()]
+                data_dirs.append(
+                    f"{CATEGORY}/{sub.name}/ (하위: {children})" if children else f"{CATEGORY}/{sub.name}/"
+                )
+    else:
+        data_dirs = [CATEGORY]
     deadline = time.time() + args.hours * 3600
     target_rounds = args.rounds if args.rounds > 0 else float("inf")
 
@@ -340,9 +351,11 @@ def main() -> int:
             # 2. cq 디스패치
             with_flags = " ".join(f"--with {r}" for r in reqs if re.match(r"^[A-Za-z0-9_.\-]+$", r))
             # tee로 stdout(metric 파싱) 유지 + train_run.log(traceback 회수). pipefail로 실패 감지.
+            # stdout(@image_auroc)은 cq metric writer로 직접, stderr(traceback)만 파일로.
+            # tee/파이프는 cq metric 파싱을 막으므로 2>로 분리 (stdout 비파이프 유지).
             command = (
-                f'set -o pipefail; {CMD_PREFIX} {with_flags} '
-                f'python train.py --data-root {DATA_ROOT} 2>&1 | tee train_run.log'
+                f'{CMD_PREFIX} {with_flags} '
+                f'python -u train.py --data-root {DATA_ROOT} 2> train_err.log'
             )
             try:
                 jid = cq.dispatch(name=f"bottle-r{rnd:04d}", command=command, code=code, requirements=reqs)
