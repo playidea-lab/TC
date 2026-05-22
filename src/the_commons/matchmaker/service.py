@@ -87,7 +87,11 @@ class MatchmakerService:
         self._template_version = settings.template_version
 
     async def recommend(
-        self, query: QueryFeatures, *, round_id: str | None = None
+        self,
+        query: QueryFeatures,
+        *,
+        round_id: str | None = None,
+        force_explore: bool = False,
     ) -> RecommendResult:
         """end-to-end recommend 흐름. 외부 LLM 실패는 graceful degrade."""
         # 1. serialize query
@@ -172,7 +176,8 @@ class MatchmakerService:
             and composed
         ):
             composed = await self._synthesize_first(
-                composed, records, hits, query, round_id=round_id
+                composed, records, hits, query, round_id=round_id,
+                force_explore=force_explore,
             )
 
         return RecommendResult(
@@ -189,11 +194,15 @@ class MatchmakerService:
         query: QueryFeatures,
         *,
         round_id: str | None,
+        force_explore: bool = False,
     ) -> list[ComposedCandidate]:
         """composed[0]에 next_config + policy 메타를 채운다.
 
         세 의존성(policy/within_synth/novelty_synth)이 모두 주입된 경우에만 호출됨.
         나머지 candidate는 그대로 (cq는 첫 candidate만 실행).
+
+        force_explore=True면 ε 동전을 건너뛰고 explore 강제 — cq가 cold-start/stagnation
+        시 agentic novelty(웹검색)를 깨우기 위함.
         """
         assert self._policy is not None
         assert self._within_synth is not None
@@ -202,10 +211,14 @@ class MatchmakerService:
         effective_round = round_id or uuid.uuid4().hex
         intent_goal = query.intent.goal
 
-        branch: Branch = self._policy.choose_branch(
-            corpus_size=len(hits),
-            round_id=effective_round,
-            intent=intent_goal,
+        branch: Branch = (
+            "explore"
+            if force_explore
+            else self._policy.choose_branch(
+                corpus_size=len(hits),
+                round_id=effective_round,
+                intent=intent_goal,
+            )
         )
 
         top = composed[0]
@@ -241,8 +254,12 @@ class MatchmakerService:
             "epsilon": eps_value,
             "version": self._policy.version,
             "wild_card_fired": branch == "explore",
+            "forced": force_explore,
             "round_id": effective_round,
         }
+        # agentic novelty가 웹검색 출처를 채웠으면 정책 메타에 실어 envelope까지 전달.
+        if proposal.sources:
+            policy_meta["sources"] = proposal.sources
 
         new_top = dataclasses.replace(
             top,

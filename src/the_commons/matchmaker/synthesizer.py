@@ -52,12 +52,17 @@ class RecipeStats:
 
 @dataclass(frozen=True)
 class NextConfigProposal:
-    """Synthesizer의 출력. ComposedCandidate.next_config/recipe_id로 흐름 연결."""
+    """Synthesizer의 출력. ComposedCandidate.next_config/recipe_id로 흐름 연결.
+
+    sources: agentic novelty(web search)가 참조한 출처 URL 목록. 단발 synth는 빈 리스트.
+    envelope.attribution.sources로 박혀 lineage 추적성을 높인다.
+    """
 
     recipe_id: str
     next_config: dict[str, Any]
     reasoning: str
     evidence_ids: list[str] = field(default_factory=list)
+    sources: list[str] = field(default_factory=list)
 
 
 # ---------- 공통 ----------

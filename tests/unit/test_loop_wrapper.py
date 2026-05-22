@@ -60,6 +60,15 @@ def test_loop_state_round_trip(tmp_path: Path) -> None:
     assert len(loaded.history) == 2
 
 
+def test_loop_state_persists_rounds_since_best(tmp_path: Path) -> None:
+    """stagnation 카운터(rounds_since_best)가 재시작에 이어받아져야 한다."""
+    p = tmp_path / "s.json"
+    s = _loop.LoopState(last_round=10, rounds_since_best=7)
+    s.save(p)
+    loaded = _loop.LoopState.load(p)
+    assert loaded.rounds_since_best == 7
+
+
 def test_loop_state_caps_history_to_50(tmp_path: Path) -> None:
     p = tmp_path / "s.json"
     s = _loop.LoopState(history=[{"round": i} for i in range(100)])

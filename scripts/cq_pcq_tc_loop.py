@@ -69,6 +69,7 @@ class LoopState:
     best_metric_value: float | None = None
     best_metric_name: str | None = None
     current_intent: str = DEFAULT_INTENT
+    rounds_since_best: int = 0  # best 갱신 없이 지난 round 수 (stagnation 감지)
     history: list[dict[str, Any]] = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
@@ -79,6 +80,7 @@ class LoopState:
             "best_metric_value": self.best_metric_value,
             "best_metric_name": self.best_metric_name,
             "current_intent": self.current_intent,
+            "rounds_since_best": self.rounds_since_best,
             "history": self.history[-50:],  # 마지막 50개만 보존 — 파일 크기 cap
         }
 
@@ -94,6 +96,7 @@ class LoopState:
             best_metric_value=data.get("best_metric_value"),
             best_metric_name=data.get("best_metric_name"),
             current_intent=data.get("current_intent", DEFAULT_INTENT),
+            rounds_since_best=data.get("rounds_since_best", 0),
             history=data.get("history", []),
         )
 
@@ -219,7 +222,13 @@ def build_envelope(
         "operator": CONTRIB_ID,
     }
     if policy_meta is not None:
-        attribution["policy"] = policy_meta
+        # agentic novelty의 웹검색 출처는 policy 밖 attribution.sources로 승격 —
+        # "이 recipe가 어떤 외부 근거로 만들어졌나"의 1급 메타.
+        pm = dict(policy_meta)
+        sources = pm.pop("sources", None)
+        attribution["policy"] = pm
+        if sources:
+            attribution["sources"] = sources
 
     # PCQ Intent.goal은 enum 5개 (exploration/hyperparam_sweep/...). 사용자가 intent_file에
     # 자유 텍스트로 박은 steering 메시지는 Intent.extra("description") 필드로 보존한다.
@@ -302,13 +311,19 @@ def _auth_headers(token: str) -> dict[str, str]:
 
 
 def call_recommend(
-    client: httpx.Client, token: str, tc_url: str, query: dict[str, Any], round_id: str
+    client: httpx.Client,
+    token: str,
+    tc_url: str,
+    query: dict[str, Any],
+    round_id: str,
+    *,
+    force_explore: bool = False,
 ) -> dict[str, Any]:
     r = client.post(
         f"{tc_url}/recommend",
-        json={"query": query, "round_id": round_id},
+        json={"query": query, "round_id": round_id, "force_explore": force_explore},
         headers=_auth_headers(token),
-        timeout=120.0,
+        timeout=180.0,  # agentic explore(web search)는 단발보다 느림
     )
     r.raise_for_status()
     return r.json()
@@ -398,6 +413,12 @@ def main() -> int:
         default=3,
         help="PoC 속도 가드 — 실제 train epochs cap (envelope.config는 원본 유지)",
     )
+    parser.add_argument(
+        "--stagnation-rounds",
+        type=int,
+        default=5,
+        help="best가 이 round 수만큼 정체하면 agentic explore 강제 (E3)",
+    )
     args = parser.parse_args()
 
     state = LoopState.load(args.state_file)
@@ -440,7 +461,18 @@ def main() -> int:
                     "has_gpu": False,
                 },
             }
-            rec = call_recommend(client, token, args.tc_url, query, round_id)
+            # cold-start(첫 round) 또는 stagnation(best가 R round 정체) 시 agentic
+            # explore 강제 — 웹검색으로 외부 지식 주입.
+            force_explore = (
+                state.last_evidence_id is None
+                or state.rounds_since_best >= args.stagnation_rounds
+            )
+            if force_explore:
+                why = "cold-start" if state.last_evidence_id is None else "stagnation"
+                print(f"  ⚑ force_explore ({why}, rounds_since_best={state.rounds_since_best})", flush=True)
+            rec = call_recommend(
+                client, token, args.tc_url, query, round_id, force_explore=force_explore
+            )
             cands = rec.get("candidates", [])
             if not cands:
                 print("  ⚠ /recommend returned no candidates — skip round", flush=True)
@@ -499,18 +531,22 @@ def main() -> int:
 
             # 5. state 갱신
             metric_name, metric_val = primary_metric(metrics)
-            if (
+            improved = (
                 metric_val is not None
                 and not metrics.get("failed")
                 and (
                     state.best_metric_value is None
                     or metric_val > state.best_metric_value
                 )
-            ):
+            )
+            if improved:
                 state.best_metric_value = metric_val
                 state.best_metric_name = metric_name
                 state.best_evidence_id = evidence_id
+                state.rounds_since_best = 0  # stagnation 카운터 리셋
                 print(f"  ★ new best: {metric_name}={metric_val} ({evidence_id})", flush=True)
+            else:
+                state.rounds_since_best += 1
 
             state.last_round = round_no
             state.last_evidence_id = evidence_id

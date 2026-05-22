@@ -184,6 +184,32 @@ async def test_v1_explore_branch_uses_novelty_recipe(
     assert top.evidence_ids == []
 
 
+async def test_v1_force_explore_overrides_coin(
+    seeded: tuple[InMemoryEvidenceStore, InMemoryVectorIndex],
+) -> None:
+    """force_explore=True면 ε 동전을 무시하고 explore 강제 (cold-start/stagnation용)."""
+    store, index = seeded
+    # eps=0이면 원래 항상 exploit인데, force_explore가 그걸 뒤집어야
+    service = _build_v1_service(store, index, eps=0.0)
+    result = await service.recommend(_query(), round_id="r-1", force_explore=True)
+    top = result.candidates[0]
+    assert top.policy is not None
+    assert top.policy["branch"] == "explore"
+    assert top.policy["forced"] is True
+
+
+async def test_v1_no_force_respects_coin(
+    seeded: tuple[InMemoryEvidenceStore, InMemoryVectorIndex],
+) -> None:
+    """force_explore=False(기본)면 ε 동전대로 — eps=0이면 exploit."""
+    store, index = seeded
+    service = _build_v1_service(store, index, eps=0.0)
+    result = await service.recommend(_query(), round_id="r-1")
+    top = result.candidates[0]
+    assert top.policy["branch"] == "exploit"
+    assert top.policy["forced"] is False
+
+
 async def test_v1_deterministic_branch_for_same_round(
     seeded: tuple[InMemoryEvidenceStore, InMemoryVectorIndex],
 ) -> None:

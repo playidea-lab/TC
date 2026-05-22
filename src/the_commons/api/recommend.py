@@ -32,6 +32,7 @@ from the_commons.matchmaker.policy import ExplorationPolicy, FixedEpsilonPolicy
 from the_commons.matchmaker.retriever import PgvectorVectorIndex, VectorIndex
 from the_commons.matchmaker.serializer import QueryFeatures
 from the_commons.matchmaker.service import MatchmakerService
+from the_commons.matchmaker.agentic_novelty import AgenticNoveltySynthesizer
 from the_commons.matchmaker.synthesizer import (
     NoveltyRecipeSynthesizer,
     WithinRecipeSynthesizer,
@@ -53,6 +54,8 @@ class RecommendRequest(BaseModel):
 
     query: QueryFeatures
     round_id: str | None = None
+    # cold-start/stagnation 시 cq가 explore(agentic novelty) 강제. 없으면 ε 동전.
+    force_explore: bool = False
 
 
 class CandidateOut(BaseModel):
@@ -126,8 +129,10 @@ async def get_within_synth() -> WithinRecipeSynthesizer:
 
 
 async def get_novelty_synth() -> NoveltyRecipeSynthesizer:
-    """explore 분기 합성기. OpenAI generation (Gemini quota 회피)."""
-    return NoveltyRecipeSynthesizer(llm=OpenAIChatLLM())
+    """explore 분기 합성기 — 웹검색 agentic novelty. web_search/agent 실패 시 단발
+    NoveltyRecipeSynthesizer로 degrade. 반환 타입은 duck-typing(propose 시그니처 동일)."""
+    fallback = NoveltyRecipeSynthesizer(llm=OpenAIChatLLM())
+    return AgenticNoveltySynthesizer(fallback=fallback)  # type: ignore[return-value]
 
 
 async def get_matchmaker_service(
@@ -180,7 +185,9 @@ async def recommend(
             headers={"Retry-After": "3600"},
         )
 
-    result = await service.recommend(body.query, round_id=body.round_id)
+    result = await service.recommend(
+        body.query, round_id=body.round_id, force_explore=body.force_explore
+    )
 
     # consumer origin을 claim에서 추출 — v0.1엔 모두 'external'로 처리 가능 (CQ가 식별)
     consumer_origin = _resolve_origin(claims)
