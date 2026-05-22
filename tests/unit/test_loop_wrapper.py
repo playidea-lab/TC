@@ -60,6 +60,27 @@ def test_loop_state_round_trip(tmp_path: Path) -> None:
     assert len(loaded.history) == 2
 
 
+def test_should_force_explore_cold_start() -> None:
+    """첫 round(evidence 없음)는 cold-start로 force."""
+    s = _loop.LoopState(last_evidence_id=None)
+    force, why = _loop.should_force_explore(s, stagnation_rounds=5)
+    assert force is True and why == "cold-start"
+
+
+def test_should_force_explore_stagnation_threshold() -> None:
+    """best가 stagnation_rounds 이상 정체하면 force."""
+    s = _loop.LoopState(last_evidence_id="ev-1", rounds_since_best=5)
+    force, why = _loop.should_force_explore(s, stagnation_rounds=5)
+    assert force is True and why == "stagnation"
+
+
+def test_should_not_force_when_recent_best() -> None:
+    """best가 최근에 갱신됐으면(정체 미달) force 안 함 — normal ε 동전."""
+    s = _loop.LoopState(last_evidence_id="ev-1", rounds_since_best=2)
+    force, why = _loop.should_force_explore(s, stagnation_rounds=5)
+    assert force is False and why is None
+
+
 def test_loop_state_persists_rounds_since_best(tmp_path: Path) -> None:
     """stagnation 카운터(rounds_since_best)가 재시작에 이어받아져야 한다."""
     p = tmp_path / "s.json"

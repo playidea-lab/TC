@@ -105,6 +105,24 @@ class LoopState:
         path.write_text(json.dumps(self.to_dict(), indent=2, ensure_ascii=False), encoding="utf-8")
 
 
+def should_force_explore(
+    state: "LoopState", stagnation_rounds: int
+) -> tuple[bool, str | None]:
+    """이 round를 agentic explore로 강제할지 판정.
+
+    - cold-start: 첫 round (last_evidence_id 없음) → 웹검색 baseline.
+    - stagnation: best가 stagnation_rounds 이상 정체 → 외부 지식 주입.
+
+    stagnation은 1회성이어야 한다 — 발동 후 카운터를 리셋(호출부 책임)해 "정체 구간마다
+    매 round 폭주"가 아니라 "stagnation_rounds마다 1회 agentic"이 되게 한다.
+    """
+    if state.last_evidence_id is None:
+        return True, "cold-start"
+    if state.rounds_since_best >= stagnation_rounds:
+        return True, "stagnation"
+    return False, None
+
+
 def load_intent(path: Path, fallback: str) -> str:
     """intent 파일이 있으면 첫 줄을 읽고, 없으면 fallback 유지."""
     if not path.exists():
@@ -463,12 +481,8 @@ def main() -> int:
             }
             # cold-start(첫 round) 또는 stagnation(best가 R round 정체) 시 agentic
             # explore 강제 — 웹검색으로 외부 지식 주입.
-            force_explore = (
-                state.last_evidence_id is None
-                or state.rounds_since_best >= args.stagnation_rounds
-            )
+            force_explore, why = should_force_explore(state, args.stagnation_rounds)
             if force_explore:
-                why = "cold-start" if state.last_evidence_id is None else "stagnation"
                 print(f"  ⚑ force_explore ({why}, rounds_since_best={state.rounds_since_best})", flush=True)
             rec = call_recommend(
                 client, token, args.tc_url, query, round_id, force_explore=force_explore
@@ -545,6 +559,10 @@ def main() -> int:
                 state.best_evidence_id = evidence_id
                 state.rounds_since_best = 0  # stagnation 카운터 리셋
                 print(f"  ★ new best: {metric_name}={metric_val} ({evidence_id})", flush=True)
+            elif why == "stagnation":
+                # stagnation force는 1회성 — 카운터 리셋해 다음 stagnation까지 normal 진행.
+                # (리셋 안 하면 best 갱신까지 매 round force_explore 폭주)
+                state.rounds_since_best = 0
             else:
                 state.rounds_since_best += 1
 
