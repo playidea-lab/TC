@@ -97,3 +97,14 @@ def test_adapter_exploit_lineage_is_derives_from() -> None:
     env = describe_to_evidence(_sample_describe(), evidence_id="ev-3", recipe_id="patchcore",
                                lineage_target="ev-1", branch="exploit")
     assert env["lineage"][0]["type"] == "derives_from"
+
+
+def test_adapter_fills_intent_goal_when_describe_lacks_intent() -> None:
+    # 실제 최소 describe(git/cq.yaml 미설정)는 intent가 empty-drop됨 → DB intent_goal
+    # NOT NULL 위반. 어댑터가 intent.goal을 보강해야 한다.
+    desc = _sample_describe()
+    del desc["intent"]
+    env = describe_to_evidence(desc, evidence_id="ev-x", recipe_id="patchcore",
+                               intent_goal="exploration")
+    assert env["pcq_record"]["intent"]["goal"] == "exploration"
+    Evidence.model_validate(env)  # intent_goal 충족 → 검증 통과

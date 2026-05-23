@@ -40,6 +40,7 @@ def describe_to_evidence(
     sample_count_band: str = "100-1k",
     cpu_cores: int = 8,
     ram_gb: int = 16,
+    intent_goal: str = "exploration",
     tier: str = "real",
     outreach_origin: str = "internal",
     lineage_target: str | None = None,
@@ -66,8 +67,12 @@ def describe_to_evidence(
         "worker_spec": worker_spec,
         "contract_version": desc.get("contract_version", "2.0"),
     }
-    # 패스스루 필드 — 있을 때만 (absent-leaf)
-    for key in ("intent", "attribution", "code", "seeds", "data_ref"):
+    # intent: describe 패스스루 + goal 보강 (DB evidence.intent_goal NOT NULL)
+    intent = dict(desc.get("intent") or {})
+    intent.setdefault("goal", intent_goal)
+    pcq_record["intent"] = intent
+    # 나머지 패스스루 — 있을 때만 (absent-leaf)
+    for key in ("attribution", "code", "seeds", "data_ref"):
         value = desc.get(key)
         if value is not None:
             pcq_record[key] = value
