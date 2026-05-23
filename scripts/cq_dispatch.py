@@ -42,11 +42,15 @@ METRIC_RE = re.compile(r"@([a-zA-Z_][a-zA-Z0-9_]*)=([-+0-9.eE]+)")
 _REQ_RE = re.compile(r"^[A-Za-z0-9_.\-]+$")
 
 
-def build_command(requirements: list[str], data_root: str) -> str:
-    """워커 실행 커맨드. stdout(@metric)은 cq metric writer로 직접, stderr(traceback)만
-    train_err.log로 분리 — tee/파이프는 metric 파싱을 막으므로 2>만 쓴다."""
-    with_flags = " ".join(f"--with {r}" for r in requirements if _REQ_RE.match(r))
-    return f"{CMD_PREFIX} {with_flags} python -u train.py --data-root {data_root} 2> train_err.log"
+def build_command(requirements: list[str]) -> str:
+    """워커 pcq run 커맨드. CQ_CONFIG_JSON(cq_config.json)으로 next_config 주입,
+    train.py가 describe.json 저장. 정본 경로라 pcq>=4.11.0 강제. stdout(@metric)은
+    cq metric writer로 직접, stderr만 train_err.log로 분리(2>)."""
+    reqs = ["pcq>=4.11.0", *[r for r in requirements if _REQ_RE.match(r)]]
+    with_flags = " ".join(f"--with {r}" for r in reqs)
+    return ('export PATH="/usr/local/bin:$HOME/.local/bin:$PATH" '
+            "&& export CQ_CONFIG_JSON=cq_config.json "
+            f"&& uv run --no-project {with_flags} python -u train.py 2> train_err.log")
 
 
 def read_run_log(job_id: str, *, tail_chars: int = 2500) -> str:
@@ -112,12 +116,13 @@ class CqMcpClient:
     def close(self) -> None:
         self._proc.terminate()
 
-    def dispatch(self, *, name: str, command: str, code: str,
+    def dispatch(self, *, name: str, command: str, code: str, config_json: dict,
                  requirements: list[str], metrics_keys: list[str]) -> str:
-        """create_job → create_run → write_file → control_job(start). job_id 반환.
+        """create_job → create_run → train.py + cq_config.json write → control_job(start).
 
-        write_file(NATS)는 노트북 워커에서 불안정 → 로컬 파일 직접 쓰기로 fallback
-        (wrapper=워커=노트북 로컬이라 가능). NATS RPC 우회."""
+        train.py·cq_config.json은 로컬 workspace에 직접 쓴다(wrapper=워커=노트북 로컬,
+        NATS write_file 불안정 우회). cq_config.json은 CQ_CONFIG_JSON으로 train.py의
+        pcq.config()에 next_config를 주입한다."""
         cj = self.call("create_job", {
             "project_id": PROJECT_ID, "name": name, "command": command,
             "config": json.dumps({"metrics": metrics_keys, "requirements": requirements}),
@@ -128,12 +133,11 @@ class CqMcpClient:
         jid = m.group(1)
         self.call("create_run", {"job_id": jid, "worker_id": WORKER_ID})
         ws_dir = WORKSPACE_ROOT / jid
-        ws = str(ws_dir / "train.py")
-        self.call("write_file", {"worker_id": WORKER_ID, "path": ws, "content": code})
-        local = ws_dir / "train.py"
-        if not local.exists() or local.read_text(errors="replace") != code:
-            ws_dir.mkdir(parents=True, exist_ok=True)
-            local.write_text(code, encoding="utf-8")
+        ws_dir.mkdir(parents=True, exist_ok=True)
+        (ws_dir / "train.py").write_text(code, encoding="utf-8")
+        (ws_dir / "cq_config.json").write_text(json.dumps(config_json), encoding="utf-8")
+        # NATS write_file은 best-effort (로컬이 정본)
+        self.call("write_file", {"worker_id": WORKER_ID, "path": str(ws_dir / "train.py"), "content": code})
         self.call("control_job", {"action": "start", "job_id": jid, "worker_id": WORKER_ID})
         return jid
 
@@ -177,16 +181,20 @@ def parse_metrics(status_text: str) -> tuple[dict, bool]:
 
 
 def cmd_dispatch(args: argparse.Namespace) -> int:
-    """train.py를 cq로 디스패치 → 실행 → 결과 JSON stdout.
+    """pcq 통합 train.py를 cq로 디스패치 → pcq run → describe.json 회수 → stdout.
 
-    출력의 workspace에서 agent가 pcq describe_run을 읽어 tc_ingest_pcq로 적재한다.
+    inject(next_config)는 cq_config.json으로 train.py의 pcq.config()에 주입된다.
+    출력의 describe를 agent가 the-commons.tc_ingest_pcq로 적재한다(정본 경로).
     """
     code = Path(args.code).read_text(encoding="utf-8")
-    command = build_command(args.req or [], args.data_root)
+    inject = json.loads(args.inject) if args.inject else {}
+    config_json = {"output_dir": ".", "monitor": args.monitor, "mode": "max", **inject}
+    command = build_command(args.req or [])
     cq = CqMcpClient()
     try:
-        jid = cq.dispatch(name=f"{args.recipe}-{int(time.time())}", command=command,
-                          code=code, requirements=args.req or [], metrics_keys=args.metric or [])
+        jid = cq.dispatch(name=f"{args.recipe}-{int(time.time())}", command=command, code=code,
+                          config_json=config_json, requirements=args.req or [],
+                          metrics_keys=args.metric or [])
         status = cq.poll(jid, run_timeout=args.run_timeout)
     finally:
         cq.close()
@@ -195,8 +203,16 @@ def cmd_dispatch(args: argparse.Namespace) -> int:
         tail = read_run_log(jid)
         if tail:
             metrics["stderr_tail"] = tail
+    # train.py가 workspace에 저장한 describe.json 회수 (pcq describe_run 출력)
+    describe = None
+    dp = WORKSPACE_ROOT / jid / "describe.json"
+    if dp.exists():
+        try:
+            describe = json.loads(dp.read_text(encoding="utf-8"))
+        except (json.JSONDecodeError, OSError):
+            pass
     out = {"job_id": jid, "ok": ok, "metrics": metrics,
-           "workspace": str(WORKSPACE_ROOT / jid)}
+           "workspace": str(WORKSPACE_ROOT / jid), "describe": describe}
     print(json.dumps(out, ensure_ascii=False, indent=2))
     return 0 if ok else 1
 
@@ -204,11 +220,12 @@ def cmd_dispatch(args: argparse.Namespace) -> int:
 def main() -> int:
     ap = argparse.ArgumentParser(
         description="cq 코드 디스패치 헬퍼 (추천·적재는 the-commons MCP, 코드는 Claude Code)")
-    ap.add_argument("--code", required=True, help="Claude Code가 작성한 train.py 경로")
+    ap.add_argument("--code", required=True, help="Claude Code가 작성한 pcq 통합 train.py 경로")
     ap.add_argument("--recipe", required=True, help="job 이름 prefix (예: patchcore)")
+    ap.add_argument("--inject", help='cq_config.json에 주입할 next_config JSON (예: \'{"lr":0.001}\')')
+    ap.add_argument("--monitor", default="image_auroc", help="best 판정 metric")
     ap.add_argument("--metric", action="append", help="cq 회수 메트릭 (다중)")
-    ap.add_argument("--req", action="append", help="pip requirement (다중)")
-    ap.add_argument("--data-root", default=DATA_ROOT, help="워커 train.py --data-root")
+    ap.add_argument("--req", action="append", help="추가 pip requirement (pcq는 자동 포함)")
     ap.add_argument("--run-timeout", type=int, default=1200)
     return cmd_dispatch(ap.parse_args())
 
