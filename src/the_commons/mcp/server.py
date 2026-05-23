@@ -13,7 +13,6 @@ core 함수(_post_*/_get_*/build_run_envelope)는 httpx client를 주입받아 �
 
 from __future__ import annotations
 
-import hashlib
 import os
 import time
 import uuid
@@ -24,7 +23,6 @@ import httpx
 import jwt
 from mcp.server.fastmcp import FastMCP
 
-from the_commons.library.content_hash import compute_integrity
 from the_commons.mcp.adapter import describe_to_evidence
 
 # 설정 — 환경변수 우선, dev 기본값(localhost) 허용
@@ -140,45 +138,6 @@ async def _get_evidence(client: httpx.AsyncClient, token: str, evidence_id: str)
     return r.json().get("evidence", {})
 
 
-def build_run_envelope(*, evidence_id: str, recipe_id: str, code: str,
-                       metrics: dict[str, Any], config: dict[str, Any] | None,
-                       requirements: list[str], intent: str, modality: str,
-                       data_uri: str, primary_metric: str, baseline: float,
-                       lineage_target: str | None, branch: str) -> dict[str, Any]:
-    """raw 필드 → PCQ envelope 조립 (agent 대신 봉투 보일러플레이트 흡수).
-
-    next_config는 config로 들어와 PCQ config에 recipe_id와 함께 기록된다 →
-    infogain within-recipe·중복 회피 가드가 살아난다."""
-    code_sha = hashlib.sha256(code.encode()).hexdigest()
-    pcq: dict[str, Any] = {
-        "intent": {"goal": "exploration", "description": intent,
-                   "expected_baseline": {"metric": primary_metric, "value": baseline},
-                   "tolerance": {"direction": "higher_is_better", "margin": 0.02}},
-        "data_fingerprint": {"modality": modality, "sample_count_band": "100-1k",
-                             "schema_summary": {}},
-        "config": {"recipe_id": recipe_id, **(config or {})},
-        "metrics": metrics,
-        "worker_spec": _worker_spec(),
-        "attribution": {"author": {"id": CONTRIB_ID, "kind": "agent"}, "operator": CONTRIB_ID,
-                        "policy": {"branch": branch, "recipe_id": recipe_id}},
-        "code": {"content_sha256": code_sha, "content": code,
-                 "scope": {"kind": "entry_script", "files": ["train.py"]},
-                 "requirements": requirements},
-        "seeds": {"main": 42, "data": "filesystem-order"},
-        "data_ref": {"uri": data_uri, "content_sha256": "agent-local", "size_bytes": 0},
-        "contract_version": "2.0",
-    }
-    pcq["integrity"] = compute_integrity(pcq)
-    env: dict[str, Any] = {"evidence_id": evidence_id, "tier": "real",
-                           "outreach_origin": "internal", "synthetic_source": None,
-                           "pcq_record": pcq}
-    if lineage_target:
-        lineage_type = "exploration" if branch == "explore" else "derives_from"
-        env["lineage"] = [{"type": lineage_type, "target_evidence_id": lineage_target,
-                          "metadata": {"branch": branch}}]
-    return env
-
-
 async def _post_ingest_run(client: httpx.AsyncClient, token: str, *, envelope: dict[str, Any]) -> str:
     """조립된 envelope을 TC /ingest로 적재 → evidence_id."""
     r = await client.post(f"{TC_URL}/ingest", json={"evidence": envelope}, headers=_headers(token))
@@ -229,26 +188,6 @@ async def tc_get_evidence(evidence_id: str) -> dict[str, Any]:
 
 
 @mcp.tool()
-async def tc_ingest_run(evidence_id: str, recipe_id: str, code: str, metrics: dict[str, Any],
-                        intent: str, config: dict[str, Any] | None = None,
-                        requirements: list[str] | None = None, modality: str = "vision",
-                        data_uri: str = "file://local", primary_metric: str = "image_auroc",
-                        baseline: float = 0.9, lineage_target: str | None = None,
-                        branch: str = "manual") -> str:
-    """실험 결과를 PCQ 계약으로 봉인해 TC에 적재 → evidence_id.
-
-    agent는 raw 필드만 넘긴다 — sha256/integrity/data_ref는 서버가 조립한다.
-    config(=recommend의 next_config)는 PCQ config에 기록되어 infogain이 읽는다."""
-    env = build_run_envelope(
-        evidence_id=evidence_id, recipe_id=recipe_id, code=code, metrics=metrics,
-        config=config, requirements=requirements or [], intent=intent, modality=modality,
-        data_uri=data_uri, primary_metric=primary_metric, baseline=baseline,
-        lineage_target=lineage_target, branch=branch)
-    async with httpx.AsyncClient(timeout=_DEFAULT_TIMEOUT) as c:
-        return await _post_ingest_run(c, _issue_jwt(), envelope=env)
-
-
-@mcp.tool()
 async def tc_ingest_pcq(describe: dict[str, Any], recipe_id: str,
                         evidence_id: str | None = None, modality: str = "vision",
                         sample_count_band: str = "100-1k",
@@ -257,7 +196,8 @@ async def tc_ingest_pcq(describe: dict[str, Any], recipe_id: str,
 
     pcq가 만든 계약(describe)을 받아 TC evidence로 변환·저장한다 — agent는 봉투를
     조립하지 않고 pcq가 만든 것을 그대로 넘긴다. config의 hyperparams 본문(P5)이
-    within_synth로 흐른다. evidence_id 미지정 시 자동 생성. (raw 경로는 tc_ingest_run)"""
+    within_synth로 흐른다. evidence_id 미지정 시 자동 생성. TC의 유일한 적재 경로 —
+    모든 evidence는 pcq describe(train.py 실측 effective)에서 온다."""
     eid = evidence_id or f"ev-{recipe_id}-{uuid.uuid4().hex[:8]}"
     env = describe_to_evidence(describe, evidence_id=eid, recipe_id=recipe_id,
                                modality=modality, sample_count_band=sample_count_band,
