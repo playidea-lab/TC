@@ -16,6 +16,7 @@ from __future__ import annotations
 import hashlib
 import os
 import time
+import uuid
 from pathlib import Path
 from typing import Any
 
@@ -24,6 +25,7 @@ import jwt
 from mcp.server.fastmcp import FastMCP
 
 from the_commons.library.content_hash import compute_integrity
+from the_commons.mcp.adapter import describe_to_evidence
 
 # 설정 — 환경변수 우선, dev 기본값(localhost) 허용
 TC_URL = os.getenv("TC_MCP_URL", "http://127.0.0.1:8001")
@@ -242,6 +244,24 @@ async def tc_ingest_run(evidence_id: str, recipe_id: str, code: str, metrics: di
         config=config, requirements=requirements or [], intent=intent, modality=modality,
         data_uri=data_uri, primary_metric=primary_metric, baseline=baseline,
         lineage_target=lineage_target, branch=branch)
+    async with httpx.AsyncClient(timeout=_DEFAULT_TIMEOUT) as c:
+        return await _post_ingest_run(c, _issue_jwt(), envelope=env)
+
+
+@mcp.tool()
+async def tc_ingest_pcq(describe: dict[str, Any], recipe_id: str,
+                        evidence_id: str | None = None, modality: str = "vision",
+                        sample_count_band: str = "100-1k",
+                        lineage_target: str | None = None, branch: str = "manual") -> str:
+    """pcq `describe_run` 결과를 TC에 적재 → evidence_id (pcq 정본 경로).
+
+    pcq가 만든 계약(describe)을 받아 TC evidence로 변환·저장한다 — agent는 봉투를
+    조립하지 않고 pcq가 만든 것을 그대로 넘긴다. config의 hyperparams 본문(P5)이
+    within_synth로 흐른다. evidence_id 미지정 시 자동 생성. (raw 경로는 tc_ingest_run)"""
+    eid = evidence_id or f"ev-{recipe_id}-{uuid.uuid4().hex[:8]}"
+    env = describe_to_evidence(describe, evidence_id=eid, recipe_id=recipe_id,
+                               modality=modality, sample_count_band=sample_count_band,
+                               lineage_target=lineage_target, branch=branch)
     async with httpx.AsyncClient(timeout=_DEFAULT_TIMEOUT) as c:
         return await _post_ingest_run(c, _issue_jwt(), envelope=env)
 
