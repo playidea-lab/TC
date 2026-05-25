@@ -89,7 +89,11 @@ class RecommendResponse(BaseModel):
 
 
 async def get_embedder() -> EmbeddingProvider:
-    """production embedder. test는 dependency_overrides로 교체."""
+    """production embedder. settings.embedding_provider=local이면 BGE-m3(LLM-free).
+    test는 dependency_overrides로 교체."""
+    if settings.embedding_provider == "local":
+        from the_commons.llm.local_embedding import shared_local_embedder
+        return shared_local_embedder()
     return GeminiEmbedding2Provider()
 
 

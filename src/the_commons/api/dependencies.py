@@ -11,6 +11,7 @@ from the_commons.db.session import get_connection
 from the_commons.library.store import EvidenceStore, PostgresEvidenceStore
 from the_commons.llm.gemini import GeminiEmbedding2Provider
 from the_commons.llm.protocol import EmbeddingProvider
+from the_commons.settings import settings
 from the_commons.reciprocity.event_store import (
     InMemoryReciprocityEventStore,
     PostgresReciprocityEventStore,
@@ -51,7 +52,11 @@ async def get_reciprocity_store(
 
 
 async def get_embedder() -> EmbeddingProvider:
-    """production embedder. test는 dependency_overrides로 교체."""
+    """production embedder. settings.embedding_provider=local이면 BGE-m3(LLM-free).
+    test는 dependency_overrides로 교체."""
+    if settings.embedding_provider == "local":
+        from the_commons.llm.local_embedding import shared_local_embedder
+        return shared_local_embedder()
     return GeminiEmbedding2Provider()
 
 

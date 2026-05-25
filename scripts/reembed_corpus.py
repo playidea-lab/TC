@@ -19,10 +19,12 @@ async def main() -> None:
     await init_pool()
     embedder = await get_embedder()
     registry = default_registry()
+    # local(BGE-m3)은 quota 없음 → delay 0; Gemini는 RPM(분당 한도) 회피 위해 5s
+    delay = 0.0 if settings.embedding_provider == "local" else 5.0
     n = 0
     try:
         async for store in get_evidence_store():
-            evidences, total = await store.list_evidence(deprecated=False, limit=500)
+            evidences, total = await store.list_evidence(deprecated=False, limit=2000)
             print(f"re-embedding {len(evidences)}/{total} evidence (template={settings.template_version})")
             for ev in evidences:
                 text = registry.serialize_evidence(ev, version=settings.template_version)
@@ -30,7 +32,7 @@ async def main() -> None:
                 await store.update_embedding(ev.evidence_id, vector)
                 n += 1
                 print(f"  [{n}] {ev.evidence_id}: {text[:90]}", flush=True)
-                await asyncio.sleep(5)  # Gemini embedding RPM(분당 한도) 회피
+                await asyncio.sleep(delay)
             break  # get_evidence_store는 단일 store를 yield
     finally:
         await close_pool()
