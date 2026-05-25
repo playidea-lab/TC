@@ -13,6 +13,7 @@ import httpx
 
 from the_commons.mcp.server import (
     _get_evidence,
+    _get_knowledge_trends,
     _get_recent_attempts,
     _post_ingest_run,
     _post_recommend,
@@ -95,6 +96,45 @@ async def test_recent_attempts_recipe_filter() -> None:
     assert len(out) == 1
     assert out[0]["recipe_id"] == "xgb"
     assert "failed" not in out[0]["metrics"]  # 요약 metrics에서 failed/stderr 제외
+
+
+# ---------- knowledge (귀납지식 환류) ----------
+
+
+async def test_knowledge_trends_computes_monotonic_from_corpus() -> None:
+    def handler(req: httpx.Request) -> httpx.Response:
+        assert req.url.path == "/evidence"
+        return httpx.Response(200, json={"evidences": [
+            {"pcq_record": {"config": {"recipe_id": "pc", "memory_size": 10000}, "metrics": {"image_auroc": 0.74}}},
+            {"pcq_record": {"config": {"recipe_id": "pc", "memory_size": 50000}, "metrics": {"image_auroc": 0.91}}},
+            {"pcq_record": {"config": {"recipe_id": "pc", "memory_size": 100000}, "metrics": {"image_auroc": 0.96}}},
+        ], "total": 3})
+
+    async with _client(handler) as c:
+        out = await _get_knowledge_trends(c, "t", modality="vision", metric="image_auroc")
+    assert len(out) == 1
+    assert out[0]["recipe_id"] == "pc"
+    axes = {a["axis"]: a for a in out[0]["axes"]}
+    assert axes["memory_size"]["direction"] == "increasing"
+    assert "next_config" not in out[0]  # KR6: 처방 없음
+
+
+async def test_knowledge_trends_recipe_filter() -> None:
+    def handler(req: httpx.Request) -> httpx.Response:
+        return httpx.Response(200, json={"evidences": [
+            {"pcq_record": {"config": {"recipe_id": "pc", "memory_size": 1}, "metrics": {"image_auroc": 0.5}}},
+            {"pcq_record": {"config": {"recipe_id": "pc", "memory_size": 2}, "metrics": {"image_auroc": 0.6}}},
+            {"pcq_record": {"config": {"recipe_id": "ae", "latent_dim": 64}, "metrics": {"image_auroc": 0.4}}},
+            {"pcq_record": {"config": {"recipe_id": "ae", "latent_dim": 128}, "metrics": {"image_auroc": 0.3}}},
+        ], "total": 4})
+
+    async with _client(handler) as c:
+        out = await _get_knowledge_trends(c, "t", modality="vision",
+                                          metric="image_auroc", recipe_id="ae")
+    assert len(out) == 1
+    assert out[0]["recipe_id"] == "ae"
+    axes = {a["axis"]: a for a in out[0]["axes"]}
+    assert axes["latent_dim"]["direction"] == "decreasing"
 
 
 # ---------- get_evidence ----------
