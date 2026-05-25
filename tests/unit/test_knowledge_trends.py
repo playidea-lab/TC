@@ -50,8 +50,10 @@ def test_summarize_trends_non_monotonic():
 
 def test_summarize_trends_groups_by_recipe():
     samples = [
-        _s("a", {"k": 1}, 0.5), _s("a", {"k": 2}, 0.6),
-        _s("b", {"k": 1}, 0.7), _s("b", {"k": 2}, 0.8),
+        _s("a", {"k": 1}, 0.5),
+        _s("a", {"k": 2}, 0.6),
+        _s("b", {"k": 1}, 0.7),
+        _s("b", {"k": 2}, 0.8),
     ]
     result = summarize_trends(samples, "image_auroc")
     assert {rt.recipe_id for rt in result} == {"a", "b"}
@@ -63,8 +65,8 @@ def test_summarize_trends_ignores_non_numeric_axis():
         _s("p", {"backbone": "wide_resnet50_2", "memory_size": 50000}, 0.9),
     ]
     axes = {a.axis: a for a in summarize_trends(samples, "image_auroc")[0].axes}
-    assert "memory_size" in axes      # numeric 축
-    assert "backbone" not in axes     # categorical(string) — KR3 범위 밖
+    assert "memory_size" in axes  # numeric 축
+    assert "backbone" not in axes  # categorical(string) — KR3 범위 밖
 
 
 def test_summarize_trends_output_has_no_prescription_field():

@@ -32,7 +32,10 @@ def _node(evidence_id: str, evidence: dict[str, Any], metric: str) -> dict[str, 
 
 
 def trace_lineage(
-    evidences: list[dict[str, Any]], start_id: str, *, metric: str = "image_auroc",
+    evidences: list[dict[str, Any]],
+    start_id: str,
+    *,
+    metric: str = "image_auroc",
 ) -> list[dict[str, Any]]:
     """start_id에서 derives_from 조상 사슬을 따라간 노드 요약 리스트.
 

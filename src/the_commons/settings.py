@@ -1,7 +1,5 @@
 """환경변수 기반 설정. Pydantic Settings로 .env 파일 자동 로드."""
 
-from typing import Literal
-
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
@@ -30,12 +28,7 @@ class Settings(BaseSettings):
     gemini_reranker_model: str = Field(default="gemini-2.5-flash")
     embedding_provider: str = Field(
         default="gemini",
-        description="gemini | local(BGE-m3, LLM-free, 1024-dim 동일). 전환 시 corpus 전체 re-embed.",
-    )
-    recommend_synthesis: bool = Field(
-        default=True,
-        description="추천 LLM 처방(synth/prior/reranker). False=KR7 격하: retrieve+유사도 후보만"
-        "(LLM-free). 주경로는 환류(tc_knowledge/tc_lineage) 기반 에이전트 판단.",
+        description="gemini | local(BGE-m3, LLM-free, 1024-dim). 전환 시 corpus 전체 re-embed.",
     )
 
     # OpenAI — generation(synthesizer + infogain prior)용. Gemini quota 회피.
@@ -61,18 +54,6 @@ class Settings(BaseSettings):
     # 매치메이커
     retrieve_top_k: int = Field(default=20, description="Stage 1 vector retrieve 상위 K개")
     recommend_top_n: int = Field(default=5, description="Stage 2 rerank 후 응답 상위 N개")
-
-    # ε-novelty mix 정책 (cq-tc-autonomous-experiment-loop v1)
-    exploration_policy: Literal["fixed"] = Field(
-        default="fixed",
-        description="v1엔 fixed만. v2부터 corpus_decay/stagnation 등.",
-    )
-    exploration_epsilon: float = Field(
-        default=0.1,
-        ge=0.0,
-        le=1.0,
-        description="ε-novelty mix의 explore 분기 확률. 1-ε는 exploit (infogain→within-recipe LLM).",
-    )
 
     # 로깅
     log_level: str = Field(default="INFO")
@@ -106,8 +87,7 @@ class Settings(BaseSettings):
         default=1_048_576,  # 1 MB
         ge=1024,
         description=(
-            "Content-Length가 이 한도 초과 시 413. "
-            "DoS·malformed body 방어용. 단위: bytes."
+            "Content-Length가 이 한도 초과 시 413. DoS·malformed body 방어용. 단위: bytes."
         ),
     )
 

@@ -1,14 +1,15 @@
-"""POST /recommend — matchmaker stage 1+2 호출."""
+"""POST /recommend — matchmaker LLM-free 추천 (retrieve + 유사도 후보 제시).
+
+LLM 처방(synth/prior/reranker)은 제거됐다(KR7). 추천은 retrieve(로컬 임베딩)+유사도
+후보이고 처방(next_config)이 없다 — 판단은 환류(tc_knowledge/tc_lineage)를 읽은 에이전트.
+"""
 
 from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from pydantic import BaseModel
 
-from the_commons.api.dependencies import (
-    get_evidence_store,
-    get_reciprocity_store,
-)
+from the_commons.api.dependencies import get_evidence_store, get_reciprocity_store
 from the_commons.api.rate_limit import (
     check_and_consume,
     client_rate_key,
@@ -19,24 +20,12 @@ from the_commons.auth.jwt_verify import VerifiedClaims
 from the_commons.ingestion.cluster_impact import compute_problem_cluster_bucket
 from the_commons.library.store import EvidenceStore
 from the_commons.llm.cost_meter import meter
-from the_commons.llm.gemini import (
-    GeminiEmbedding2Provider,
-    GeminiFlash25Reranker,
-    GeminiPriorLLM,
-)
-from the_commons.llm.protocol import EmbeddingProvider, LLMReranker
+from the_commons.llm.gemini import GeminiEmbedding2Provider
+from the_commons.llm.protocol import EmbeddingProvider
 from the_commons.matchmaker.composer import ComposedCandidate, CorpusContext
-from the_commons.matchmaker.infogain.llm_prior import PriorLLM
-from the_commons.matchmaker.infogain.reranker import InfoGainReranker
-from the_commons.matchmaker.policy import ExplorationPolicy, FixedEpsilonPolicy
 from the_commons.matchmaker.retriever import PgvectorVectorIndex, VectorIndex
 from the_commons.matchmaker.serializer import QueryFeatures
 from the_commons.matchmaker.service import MatchmakerService
-from the_commons.matchmaker.agentic_novelty import AgenticNoveltySynthesizer
-from the_commons.matchmaker.synthesizer import (
-    NoveltyRecipeSynthesizer,
-    WithinRecipeSynthesizer,
-)
 from the_commons.reciprocity.event_store import ReciprocityEventStore
 from the_commons.reciprocity.loop_closure import record_loop_closures
 from the_commons.settings import settings
@@ -45,16 +34,10 @@ router = APIRouter(tags=["recommend"])
 
 
 class RecommendRequest(BaseModel):
-    """POST /recommend body — query only (config·metrics는 evidence 시점에).
-
-    v1 (cq-tc-autonomous-experiment-loop): round_id optional. cq의 폐루프가 매
-    round 고유 ID를 보내면 같은 (corpus, round_id, intent) 입력에 같은 분기.
-    없으면 server-side uuid4 fallback (단발 호출 호환).
-    """
+    """POST /recommend body — query only. round_id/force_explore는 호환용(LLM 합성 제거로 미사용)."""  # noqa: E501
 
     query: QueryFeatures
     round_id: str | None = None
-    # cold-start/stagnation 시 cq가 explore(agentic novelty) 강제. 없으면 ε 동전.
     force_explore: bool = False
 
 
@@ -64,11 +47,8 @@ class CandidateOut(BaseModel):
     evidence_ids: list[str]
     confidence: str
     reasoning: str
-    # v1 (cq-tc-autonomous-experiment-loop): cq가 받아 학습에 그대로 주입할 hyperparams.
-    # cold-start나 기존 호환 클라이언트 위해 optional.
+    # LLM-free 추천에선 항상 None(호환 유지). 처방·정책 메타는 더 이상 산출하지 않는다.
     next_config: dict[str, Any] | None = None
-    # ε-novelty mix 정책 메타데이터 — envelope.attribution.policy로 박힘.
-    # {branch: "exploit"|"explore"|"cold_start", epsilon: float, version: str, wild_card_fired: bool}
     policy: dict[str, Any] | None = None
 
 
@@ -93,79 +73,26 @@ async def get_embedder() -> EmbeddingProvider:
     test는 dependency_overrides로 교체."""
     if settings.embedding_provider == "local":
         from the_commons.llm.local_embedding import shared_local_embedder
+
         return shared_local_embedder()
     return GeminiEmbedding2Provider()
-
-
-async def get_reranker() -> LLMReranker:
-    """production reranker (infogain 미가용 시 fallback). test는 override."""
-    return GeminiFlash25Reranker()
-
-
-async def get_infogain_reranker() -> InfoGainReranker:
-    """production 정보이득 reranker. test는 dependency_overrides로 교체.
-
-    prior LLM은 Gemini로 통일 (recommend 경로 전체 Gemini — OpenAI 키·quota 비의존).
-    meter.record로 비용 보고 — prior 호출도 일일 cost ceiling에 포함.
-    """
-    llm: PriorLLM = GeminiPriorLLM()
-    return InfoGainReranker(llm=llm)
 
 
 async def get_vector_index(
     store: EvidenceStore = Depends(get_evidence_store),  # noqa: B008 — FastAPI 표준
 ) -> VectorIndex:
     """production vector index — Postgres store의 connection을 공유."""
-    # PostgresEvidenceStore는 self._conn 보유. pgvector 검색도 같은 conn 사용.
     if hasattr(store, "_conn"):
         return PgvectorVectorIndex(store._conn)  # noqa: SLF001 — internal wiring
     raise RuntimeError("VectorIndex 구성 불가 — Postgres store 필요")
 
 
-async def get_exploration_policy() -> ExplorationPolicy:
-    """v1: 고정 ε ε-novelty mix. v2부터 settings.exploration_policy 분기."""
-    return FixedEpsilonPolicy(eps=settings.exploration_epsilon)
-
-
-async def get_within_synth() -> WithinRecipeSynthesizer:
-    """exploit 분기 합성기 — Gemini generation (recommend 경로 Gemini 통일)."""
-    return WithinRecipeSynthesizer(llm=GeminiPriorLLM())
-
-
-async def get_novelty_synth() -> NoveltyRecipeSynthesizer:
-    """explore 분기 합성기 — Gemini google_search grounding novelty. grounding/파싱
-    실패 시 단발 NoveltyRecipeSynthesizer로 degrade. 반환 타입은 duck-typing(propose
-    시그니처 동일)."""
-    fallback = NoveltyRecipeSynthesizer(llm=GeminiPriorLLM())
-    return AgenticNoveltySynthesizer(fallback=fallback)  # type: ignore[return-value]
-
-
 async def get_matchmaker_service(
     embedder: EmbeddingProvider = Depends(get_embedder),
     vector_index: VectorIndex = Depends(get_vector_index),
-    reranker: LLMReranker = Depends(get_reranker),
     store: EvidenceStore = Depends(get_evidence_store),
-    infogain_reranker: InfoGainReranker = Depends(get_infogain_reranker),
-    policy: ExplorationPolicy = Depends(get_exploration_policy),
-    within_synth: WithinRecipeSynthesizer = Depends(get_within_synth),
-    novelty_synth: NoveltyRecipeSynthesizer = Depends(get_novelty_synth),
 ) -> MatchmakerService:
-    if not settings.recommend_synthesis:
-        # KR7 격하: LLM 처방 비활성 — retrieve(로컬 임베딩)+유사도 후보만(처방 없음).
-        # 주경로는 환류(tc_knowledge/tc_lineage) 기반 에이전트 판단.
-        return MatchmakerService(
-            embedder=embedder, vector_index=vector_index, store=store
-        )
-    return MatchmakerService(
-        embedder=embedder,
-        vector_index=vector_index,
-        reranker=reranker,
-        store=store,
-        infogain_reranker=infogain_reranker,
-        policy=policy,
-        within_synth=within_synth,
-        novelty_synth=novelty_synth,
-    )
+    return MatchmakerService(embedder=embedder, vector_index=vector_index, store=store)
 
 
 # ----------------------------------------------------------------------------
@@ -181,14 +108,10 @@ async def recommend(
     service: MatchmakerService = Depends(get_matchmaker_service),
     reciprocity: ReciprocityEventStore = Depends(get_reciprocity_store),
 ) -> RecommendResponse:
-    """query → top-N recipe 추천 + 근거 evidence IDs + corpus context.
-
-    응답에 포함된 evidence_id 각각에 대해 loop_closure event 자동 기록.
-    """
-    # rate limit — /recommend가 가장 비싼 endpoint (Gemini 호출)
+    """query → retrieve+유사도 후보 + corpus context. 각 cited evidence에 loop_closure 기록."""
     check_and_consume(recommend_bucket, client_rate_key(request, claims))
 
-    # Gemini daily cost ceiling — 도달 시 503
+    # gemini embedder 옵션 사용 시 일일 cost ceiling (embedding_provider=local이면 항상 통과)
     if meter.is_over_budget(settings.gemini_daily_budget_usd):
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
@@ -200,9 +123,7 @@ async def recommend(
         body.query, round_id=body.round_id, force_explore=body.force_explore
     )
 
-    # consumer origin을 claim에서 추출 — v0.1엔 모두 'external'로 처리 가능 (CQ가 식별)
     consumer_origin = _resolve_origin(claims)
-
     cited_ids = [eid for c in result.candidates for eid in c.evidence_ids]
     cluster_bucket = compute_problem_cluster_bucket(body.query.model_dump(mode="json"))
 

@@ -41,9 +41,24 @@ def test_evidence_to_sample_feeds_summarize_trends():
     from the_commons.knowledge.trends import summarize_trends
 
     evs = [
-        {"pcq_record": {"config": {"recipe_id": "pc", "memory_size": 10000}, "metrics": {"image_auroc": 0.74}}},
-        {"pcq_record": {"config": {"recipe_id": "pc", "memory_size": 50000}, "metrics": {"image_auroc": 0.91}}},
-        {"pcq_record": {"config": {"recipe_id": "pc", "memory_size": 100000}, "metrics": {"image_auroc": 0.96}}},
+        {
+            "pcq_record": {
+                "config": {"recipe_id": "pc", "memory_size": 10000},
+                "metrics": {"image_auroc": 0.74},
+            }
+        },
+        {
+            "pcq_record": {
+                "config": {"recipe_id": "pc", "memory_size": 50000},
+                "metrics": {"image_auroc": 0.91},
+            }
+        },
+        {
+            "pcq_record": {
+                "config": {"recipe_id": "pc", "memory_size": 100000},
+                "metrics": {"image_auroc": 0.96},
+            }
+        },
     ]
     samples = [s for ev in evs if (s := evidence_to_sample(ev))]
     axes = {a.axis: a for a in summarize_trends(samples, "image_auroc")[0].axes}
