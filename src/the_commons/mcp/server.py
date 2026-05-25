@@ -23,6 +23,8 @@ import httpx
 import jwt
 from mcp.server.fastmcp import FastMCP
 
+from the_commons.knowledge.adapter import evidence_to_sample
+from the_commons.knowledge.trends import summarize_trends
 from the_commons.mcp.adapter import describe_to_evidence
 
 # 설정 — 환경변수 우선, dev 기본값(localhost) 허용
@@ -138,6 +140,41 @@ async def _get_evidence(client: httpx.AsyncClient, token: str, evidence_id: str)
     return r.json().get("evidence", {})
 
 
+async def _get_knowledge_trends(
+    client: httpx.AsyncClient, token: str, *, modality: str, metric: str,
+    recipe_id: str | None = None,
+) -> list[dict[str, Any]]:
+    """corpus(/evidence)를 받아 recipe별 numeric config 축의 metric 추세를 순수계산.
+
+    LLM 없음 — evidence_to_sample(어댑터) → summarize_trends(순수계산). 처방 없이 사실
+    (추세: increasing/decreasing/non_monotonic)만. 판단은 에이전트가 한다(KR6)."""
+    # /evidence는 limit<=100 (엔드포인트 검증). 최근 100건으로 추세 — 더 필요하면 페이지네이션(차후)
+    params = {"modality": modality, "limit": 100, "deprecated": "false"}
+    r = await client.get(f"{TC_URL}/evidence", params=params, headers=_headers(token))
+    r.raise_for_status()
+    samples = []
+    for ev in r.json().get("evidences", []):
+        sample = evidence_to_sample(ev)
+        if sample is None:
+            continue
+        if recipe_id and sample[0] != recipe_id:
+            continue
+        samples.append(sample)
+    return [
+        {
+            "recipe_id": rt.recipe_id,
+            "group": rt.group,
+            "metric": rt.metric,
+            "axes": [
+                {"axis": a.axis, "direction": a.direction,
+                 "points": [list(p) for p in a.points]}
+                for a in rt.axes
+            ],
+        }
+        for rt in summarize_trends(samples, metric)
+    ]
+
+
 async def _post_ingest_run(client: httpx.AsyncClient, token: str, *, envelope: dict[str, Any]) -> str:
     """조립된 envelope을 TC /ingest로 적재 → evidence_id."""
     r = await client.post(f"{TC_URL}/ingest", json={"evidence": envelope}, headers=_headers(token))
@@ -185,6 +222,20 @@ async def tc_get_evidence(evidence_id: str) -> dict[str, Any]:
     보고 변형/디버그할 코드를 펼칠 때 호출한다."""
     async with httpx.AsyncClient(timeout=_DEFAULT_TIMEOUT) as c:
         return await _get_evidence(c, _issue_jwt(), evidence_id)
+
+
+@mcp.tool()
+async def tc_knowledge(modality: str = "vision", metric: str = "image_auroc",
+                       recipe_id: str | None = None) -> list[dict[str, Any]]:
+    """누적 corpus에서 recipe별 config 축의 metric 추세(귀납지식)를 순수계산해 반환.
+
+    환류 2단계 — tc_recent_attempts가 '사실(개별 시도)'이면 tc_knowledge는 '교훈':
+    recipe별 numeric config 축의 단조 추세(increasing/decreasing/non_monotonic)와 정렬된
+    (축값, metric) 점들. LLM 없는 순수 계산이라 결정론적. **처방(next_config)은 없다 —
+    "memory↑→auroc↑"까지가 시스템, "그러니 더 키울까/천장이니 딴 거" 판단은 에이전트."""
+    async with httpx.AsyncClient(timeout=_DEFAULT_TIMEOUT) as c:
+        return await _get_knowledge_trends(c, _issue_jwt(), modality=modality,
+                                           metric=metric, recipe_id=recipe_id)
 
 
 @mcp.tool()
