@@ -24,6 +24,7 @@ import jwt
 from mcp.server.fastmcp import FastMCP
 
 from the_commons.knowledge.adapter import evidence_to_sample
+from the_commons.knowledge.lineage import trace_lineage
 from the_commons.knowledge.trends import summarize_trends
 from the_commons.mcp.adapter import describe_to_evidence
 
@@ -175,6 +176,16 @@ async def _get_knowledge_trends(
     ]
 
 
+async def _get_lineage(
+    client: httpx.AsyncClient, token: str, *, evidence_id: str, modality: str, metric: str,
+) -> list[dict[str, Any]]:
+    """corpus(/evidence)를 받아 evidence_id의 derives_from 조상 사슬을 순회(순수계산)."""
+    params = {"modality": modality, "limit": 100, "deprecated": "false"}
+    r = await client.get(f"{TC_URL}/evidence", params=params, headers=_headers(token))
+    r.raise_for_status()
+    return trace_lineage(r.json().get("evidences", []), evidence_id, metric=metric)
+
+
 async def _post_ingest_run(client: httpx.AsyncClient, token: str, *, envelope: dict[str, Any]) -> str:
     """조립된 envelope을 TC /ingest로 적재 → evidence_id."""
     r = await client.post(f"{TC_URL}/ingest", json={"evidence": envelope}, headers=_headers(token))
@@ -236,6 +247,19 @@ async def tc_knowledge(modality: str = "vision", metric: str = "image_auroc",
     async with httpx.AsyncClient(timeout=_DEFAULT_TIMEOUT) as c:
         return await _get_knowledge_trends(c, _issue_jwt(), modality=modality,
                                            metric=metric, recipe_id=recipe_id)
+
+
+@mcp.tool()
+async def tc_lineage(evidence_id: str, modality: str = "vision",
+                     metric: str = "image_auroc") -> list[dict[str, Any]]:
+    """한 evidence의 계보(derives_from 조상 사슬)를 추격 궤적으로 반환.
+
+    교훈노트 보완 — tc_knowledge 추세가 '무엇이 좋아졌나'면, 계보는 '어떤 경로로 거기
+    왔나'다. [start, parent, grandparent, ...] 각 {evidence_id, recipe_id, metric}.
+    순수 계산(LLM 없음). 순환·누락에 안전."""
+    async with httpx.AsyncClient(timeout=_DEFAULT_TIMEOUT) as c:
+        return await _get_lineage(c, _issue_jwt(), evidence_id=evidence_id,
+                                  modality=modality, metric=metric)
 
 
 @mcp.tool()

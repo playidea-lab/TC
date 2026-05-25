@@ -14,6 +14,7 @@ import httpx
 from the_commons.mcp.server import (
     _get_evidence,
     _get_knowledge_trends,
+    _get_lineage,
     _get_recent_attempts,
     _post_ingest_run,
     _post_recommend,
@@ -135,6 +136,24 @@ async def test_knowledge_trends_recipe_filter() -> None:
     assert out[0]["recipe_id"] == "ae"
     axes = {a["axis"]: a for a in out[0]["axes"]}
     assert axes["latent_dim"]["direction"] == "decreasing"
+
+
+async def test_lineage_traces_ancestor_chain() -> None:
+    def handler(req: httpx.Request) -> httpx.Response:
+        assert req.url.path == "/evidence"
+
+        def ev(eid: str, parent: str | None) -> dict:
+            lin = [{"type": "derives_from", "target_evidence_id": parent}] if parent else []
+            return {"evidence_id": eid, "lineage": lin, "pcq_record": {
+                "config": {"recipe_id": "pc"}, "metrics": {"image_auroc": 0.9}}}
+
+        return httpx.Response(200, json={"evidences": [
+            ev("r9", "r8"), ev("r8", "r7"), ev("r7", None),
+        ], "total": 3})
+
+    async with _client(handler) as c:
+        out = await _get_lineage(c, "t", evidence_id="r9", modality="vision", metric="image_auroc")
+    assert [n["evidence_id"] for n in out] == ["r9", "r8", "r7"]
 
 
 # ---------- get_evidence ----------
