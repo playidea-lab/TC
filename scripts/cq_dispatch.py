@@ -20,6 +20,7 @@ from __future__ import annotations
 import argparse
 import json
 import re
+import shlex
 import subprocess
 import sys
 import time
@@ -42,14 +43,18 @@ METRIC_RE = re.compile(r"@([a-zA-Z_][a-zA-Z0-9_]*)=([-+0-9.eE]+)")
 _REQ_RE = re.compile(r"^[A-Za-z0-9_.\-]+$")
 
 
-def build_command(requirements: list[str]) -> str:
+def build_command(requirements: list[str], data_root: str) -> str:
     """워커 pcq run 커맨드. CQ_CONFIG_JSON(cq_config.json)으로 next_config 주입,
     train.py가 describe.json 저장. 정본 경로라 pcq>=4.11.0 강제. stdout(@metric)은
-    cq metric writer로 직접, stderr만 train_err.log로 분리(2>)."""
+    cq metric writer로 직접, stderr만 train_err.log로 분리(2>).
+
+    DATA_ROOT를 env로 export — train.py가 os.environ.get("DATA_ROOT")로 읽는 데이터셋
+    루트를 디스패치 인자로 제어(MVTec 외 데이터셋 재사용). config.data_root에도 동시 주입."""
     reqs = ["pcq>=4.11.0", *[r for r in requirements if _REQ_RE.match(r)]]
     # 작은따옴표 필수 — pcq>=4.11.0의 '>'가 쉘 리다이렉트로 깨지는 것 방지
     with_flags = " ".join(f"--with '{r}'" for r in reqs)
     return ('export PATH="/usr/local/bin:$HOME/.local/bin:$PATH" '
+            f"&& export DATA_ROOT={shlex.quote(data_root)} "
             "&& export CQ_CONFIG_JSON=cq_config.json "
             f"&& uv run --no-project {with_flags} python -u train.py 2> train_err.log")
 
@@ -189,8 +194,11 @@ def cmd_dispatch(args: argparse.Namespace) -> int:
     """
     code = Path(args.code).read_text(encoding="utf-8")
     inject = json.loads(args.inject) if args.inject else {}
-    config_json = {"output_dir": ".", "monitor": args.monitor, "mode": "max", **inject}
-    command = build_command(args.req or [])
+    # data_root는 env(DATA_ROOT)와 config(cfg.data_root) 양쪽으로 주입 — 기존 스크립트는 env,
+    # 신규 작성 스크립트는 cfg.get("data_root")로 읽을 수 있게. inject가 명시하면 그게 우선.
+    config_json = {"output_dir": ".", "monitor": args.monitor, "mode": "max",
+                   "data_root": args.data_root, **inject}
+    command = build_command(args.req or [], args.data_root)
     cq = CqMcpClient()
     try:
         jid = cq.dispatch(name=f"{args.recipe}-{int(time.time())}", command=command, code=code,
@@ -227,6 +235,8 @@ def main() -> int:
     ap.add_argument("--monitor", default="image_auroc", help="best 판정 metric")
     ap.add_argument("--metric", action="append", help="cq 회수 메트릭 (다중)")
     ap.add_argument("--req", action="append", help="추가 pip requirement (pcq는 자동 포함)")
+    ap.add_argument("--data-root", default=DATA_ROOT,
+                    help="데이터셋 루트 — train.py에 DATA_ROOT env + cfg.data_root로 주입 (기본: MVTec)")
     ap.add_argument("--run-timeout", type=int, default=1200)
     return cmd_dispatch(ap.parse_args())
 
