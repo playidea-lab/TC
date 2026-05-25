@@ -227,8 +227,11 @@ class SyntheticSource(BaseModel):
 
 
 LineageEdgeType = Literal[
-    "derives_from", "reproduces", "contradicts", "compared_to"
+    "derives_from", "reproduces", "contradicts", "compared_to", "exploration"
 ]
+# "exploration" — cq-tc-autonomous-experiment-loop v1: ε-novelty mix의 explore
+# 분기에서 wild card recipe를 시도할 때, best_so_far evidence와의 lineage edge type.
+# 사람이 lineage 트리를 볼 때 "여기서 corpus 밖으로 한 발 내딛은 분기점"을 표시.
 
 
 class LineageEdge(BaseModel):

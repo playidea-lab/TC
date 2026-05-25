@@ -22,11 +22,12 @@ def serialize_query(query: QueryFeatures) -> str:
     expected = _expected_phrase(query.intent)
     hw = _hardware_phrase(query.worker_spec)
     stats = _stats_phrase(query.data_fingerprint.statistical_moments)
+    context = _intent_context_phrase(query.intent)
 
     parts = [
         f"{modality} dataset: {band} samples{stats}.",
         f"Hardware: {hw}.",
-        f"Goal: {goal_phrase}{expected}.",
+        f"Goal: {goal_phrase}{expected}.{context}",
     ]
     return " ".join(parts)
 
@@ -38,13 +39,14 @@ def serialize_evidence(evidence: Evidence) -> str:
     modality = fp.modality if fp else "unknown"
     band = fp.sample_count_band if fp else "unknown"
     recipe = _recipe_phrase(pcq.config)
+    category = _category_phrase(pcq.config)
     metric = _metric_phrase(pcq.metrics)
     goal = pcq.intent.goal if pcq.intent else None
     intent_phrase = _goal_phrase(goal) if goal else "no declared goal"
     tier_phrase = "real" if evidence.tier == "real" else "synthetic (LLM-distilled)"
 
     return (
-        f"{recipe} run on {modality} {band} ({intent_phrase}). "
+        f"{recipe} run on {modality} {band}{category} ({intent_phrase}). "
         f"{metric}. Tier: {tier_phrase}."
     )
 
@@ -52,6 +54,27 @@ def serialize_evidence(evidence: Evidence) -> str:
 # ----------------------------------------------------------------------------
 # Phrase builders
 # ----------------------------------------------------------------------------
+
+
+def _intent_context_phrase(intent: Any) -> str:
+    """intent.description(extra='allow' 자유텍스트 — 카테고리·방향)을 검색 텍스트에 포함.
+
+    serialize_query가 modality+band+goal만 직렬화해 카테고리(bottle vs screw)를 구분 못하던
+    버그 수정 — description의 자연어 신호를 임베딩에 흘려 retrieve가 카테고리를 인식하게 한다.
+    """
+    desc = getattr(intent, "description", None)
+    if isinstance(desc, str) and desc.strip():
+        return f" Context: {desc.strip()}"
+    return ""
+
+
+def _category_phrase(config: dict[str, Any]) -> str:
+    """config.category(예: MVTec bottle/screw)를 evidence 검색 텍스트에 포함."""
+    cat = config.get("category")
+    if isinstance(cat, str) and cat:
+        return f" [{cat}]"
+    return ""
+
 
 _GOAL_PHRASES: dict[str, str] = {
     "baseline_reproduction": "reproduce a known baseline",

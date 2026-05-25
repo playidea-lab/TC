@@ -28,9 +28,15 @@ from the_commons.llm.protocol import EmbeddingProvider, LLMReranker
 from the_commons.matchmaker.composer import ComposedCandidate, CorpusContext
 from the_commons.matchmaker.infogain.llm_prior import PriorLLM
 from the_commons.matchmaker.infogain.reranker import InfoGainReranker
+from the_commons.matchmaker.policy import ExplorationPolicy, FixedEpsilonPolicy
 from the_commons.matchmaker.retriever import PgvectorVectorIndex, VectorIndex
 from the_commons.matchmaker.serializer import QueryFeatures
 from the_commons.matchmaker.service import MatchmakerService
+from the_commons.matchmaker.agentic_novelty import AgenticNoveltySynthesizer
+from the_commons.matchmaker.synthesizer import (
+    NoveltyRecipeSynthesizer,
+    WithinRecipeSynthesizer,
+)
 from the_commons.reciprocity.event_store import ReciprocityEventStore
 from the_commons.reciprocity.loop_closure import record_loop_closures
 from the_commons.settings import settings
@@ -39,9 +45,17 @@ router = APIRouter(tags=["recommend"])
 
 
 class RecommendRequest(BaseModel):
-    """POST /recommend body — query only (config·metrics는 evidence 시점에)."""
+    """POST /recommend body — query only (config·metrics는 evidence 시점에).
+
+    v1 (cq-tc-autonomous-experiment-loop): round_id optional. cq의 폐루프가 매
+    round 고유 ID를 보내면 같은 (corpus, round_id, intent) 입력에 같은 분기.
+    없으면 server-side uuid4 fallback (단발 호출 호환).
+    """
 
     query: QueryFeatures
+    round_id: str | None = None
+    # cold-start/stagnation 시 cq가 explore(agentic novelty) 강제. 없으면 ε 동전.
+    force_explore: bool = False
 
 
 class CandidateOut(BaseModel):
@@ -50,6 +64,12 @@ class CandidateOut(BaseModel):
     evidence_ids: list[str]
     confidence: str
     reasoning: str
+    # v1 (cq-tc-autonomous-experiment-loop): cq가 받아 학습에 그대로 주입할 hyperparams.
+    # cold-start나 기존 호환 클라이언트 위해 optional.
+    next_config: dict[str, Any] | None = None
+    # ε-novelty mix 정책 메타데이터 — envelope.attribution.policy로 박힘.
+    # {branch: "exploit"|"explore"|"cold_start", epsilon: float, version: str, wild_card_fired: bool}
+    policy: dict[str, Any] | None = None
 
 
 class CorpusContextOut(BaseModel):
@@ -81,8 +101,8 @@ async def get_reranker() -> LLMReranker:
 async def get_infogain_reranker() -> InfoGainReranker:
     """production 정보이득 reranker. test는 dependency_overrides로 교체.
 
-    GeminiPriorLLM은 meter.record로 비용 보고 — prior 호출도 일일 cost
-    ceiling에 포함된다 (계측 누락 = ceiling 우회 방지).
+    prior LLM은 Gemini로 통일 (recommend 경로 전체 Gemini — OpenAI 키·quota 비의존).
+    meter.record로 비용 보고 — prior 호출도 일일 cost ceiling에 포함.
     """
     llm: PriorLLM = GeminiPriorLLM()
     return InfoGainReranker(llm=llm)
@@ -98,12 +118,33 @@ async def get_vector_index(
     raise RuntimeError("VectorIndex 구성 불가 — Postgres store 필요")
 
 
+async def get_exploration_policy() -> ExplorationPolicy:
+    """v1: 고정 ε ε-novelty mix. v2부터 settings.exploration_policy 분기."""
+    return FixedEpsilonPolicy(eps=settings.exploration_epsilon)
+
+
+async def get_within_synth() -> WithinRecipeSynthesizer:
+    """exploit 분기 합성기 — Gemini generation (recommend 경로 Gemini 통일)."""
+    return WithinRecipeSynthesizer(llm=GeminiPriorLLM())
+
+
+async def get_novelty_synth() -> NoveltyRecipeSynthesizer:
+    """explore 분기 합성기 — Gemini google_search grounding novelty. grounding/파싱
+    실패 시 단발 NoveltyRecipeSynthesizer로 degrade. 반환 타입은 duck-typing(propose
+    시그니처 동일)."""
+    fallback = NoveltyRecipeSynthesizer(llm=GeminiPriorLLM())
+    return AgenticNoveltySynthesizer(fallback=fallback)  # type: ignore[return-value]
+
+
 async def get_matchmaker_service(
     embedder: EmbeddingProvider = Depends(get_embedder),
     vector_index: VectorIndex = Depends(get_vector_index),
     reranker: LLMReranker = Depends(get_reranker),
     store: EvidenceStore = Depends(get_evidence_store),
     infogain_reranker: InfoGainReranker = Depends(get_infogain_reranker),
+    policy: ExplorationPolicy = Depends(get_exploration_policy),
+    within_synth: WithinRecipeSynthesizer = Depends(get_within_synth),
+    novelty_synth: NoveltyRecipeSynthesizer = Depends(get_novelty_synth),
 ) -> MatchmakerService:
     return MatchmakerService(
         embedder=embedder,
@@ -111,6 +152,9 @@ async def get_matchmaker_service(
         reranker=reranker,
         store=store,
         infogain_reranker=infogain_reranker,
+        policy=policy,
+        within_synth=within_synth,
+        novelty_synth=novelty_synth,
     )
 
 
@@ -142,7 +186,9 @@ async def recommend(
             headers={"Retry-After": "3600"},
         )
 
-    result = await service.recommend(body.query)
+    result = await service.recommend(
+        body.query, round_id=body.round_id, force_explore=body.force_explore
+    )
 
     # consumer origin을 claim에서 추출 — v0.1엔 모두 'external'로 처리 가능 (CQ가 식별)
     consumer_origin = _resolve_origin(claims)
@@ -184,4 +230,6 @@ def _candidate_to_out(c: ComposedCandidate) -> CandidateOut:
         evidence_ids=list(c.evidence_ids),
         confidence=c.confidence,
         reasoning=c.reasoning,
+        next_config=c.next_config,
+        policy=c.policy,
     )
