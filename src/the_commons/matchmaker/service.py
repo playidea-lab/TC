@@ -65,7 +65,7 @@ class MatchmakerService:
         *,
         embedder: EmbeddingProvider,
         vector_index: VectorIndex,
-        reranker: LLMReranker,
+        reranker: LLMReranker | None = None,
         store: EvidenceStore,
         infogain_reranker: InfoGainReranker | None = None,
         policy: ExplorationPolicy | None = None,
@@ -136,7 +136,7 @@ class MatchmakerService:
                 ranked = _similarity_ordered_ranking(
                     hits, settings.recommend_top_n
                 )
-        else:
+        elif self._reranker is not None:
             candidate_texts = [
                 self._registry.serialize_evidence(
                     ev, version=self._template_version
@@ -159,6 +159,9 @@ class MatchmakerService:
                 ranked = _similarity_ordered_ranking(
                     hits, settings.recommend_top_n
                 )
+        else:
+            # KR7 LLM-free 격하: reranker/infogain 미주입 → 유사도 순서만(처방 없음)
+            ranked = _similarity_ordered_ranking(hits, settings.recommend_top_n)
 
         # 8. compose
         context = summarize_corpus(hits)

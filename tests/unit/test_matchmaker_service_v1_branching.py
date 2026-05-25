@@ -304,3 +304,19 @@ async def test_v1_synth_receives_intent_description(
     )
     await service.recommend(query, round_id="r-1")
     assert "screw" in captured["prompt"].lower()
+
+
+async def test_recommend_llm_free_uses_similarity_no_prescription(
+    seeded: tuple[InMemoryEvidenceStore, InMemoryVectorIndex],
+) -> None:
+    """KR7 격하: reranker·infogain·policy·synth 미주입 → 유사도 후보만, 처방(next_config) 없음.
+
+    LLM 호출 0. tc_recommend가 '처방'에서 '후보 제시'로 격하됐을 때의 경로 — 판단은 에이전트.
+    """
+    store, index = seeded
+    service = MatchmakerService(embedder=_OkEmbedder(), vector_index=index, store=store)
+    result = await service.recommend(_query(), round_id="r-1")
+    assert len(result.candidates) > 0
+    for c in result.candidates:
+        assert c.next_config is None  # 처방 없음
+        assert c.policy is None
