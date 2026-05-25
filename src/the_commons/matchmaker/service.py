@@ -210,6 +210,14 @@ class MatchmakerService:
 
         effective_round = round_id or uuid.uuid4().hex
         intent_goal = query.intent.goal
+        # intent.description(extra='allow' 자유텍스트 — 카테고리·방향)을 합성에 전달.
+        # goal(enum)만 넘기면 실제 의도가 사라져 corpus 과거 분포로 회귀하던 버그 수정.
+        _desc = getattr(query.intent, "description", None)
+        intent_for_synth = (
+            f"{intent_goal or 'exploration'} — {_desc.strip()}"
+            if isinstance(_desc, str) and _desc.strip()
+            else (intent_goal or "exploration")
+        )
 
         branch: Branch = (
             "explore"
@@ -226,7 +234,7 @@ class MatchmakerService:
         if branch == "explore":
             corpus_recipes = _summarize_recipes(records)
             proposal = await self._novelty_synth.propose(
-                corpus_recipes=corpus_recipes, intent=intent_goal
+                corpus_recipes=corpus_recipes, intent=intent_for_synth
             )
         else:
             # exploit: composed[0]의 recipe_id가 infogain rerank의 top.
@@ -243,7 +251,7 @@ class MatchmakerService:
                 for ev in recipe_evidences
             ]
             proposal = await self._within_synth.propose(
-                recipe_id=top_recipe, evidences=summaries, intent=intent_goal
+                recipe_id=top_recipe, evidences=summaries, intent=intent_for_synth
             )
 
         # 정책 인스턴스의 실제 ε를 박는다 (v2 가변 정책 호환). 정책에 eps 속성이

@@ -257,3 +257,50 @@ async def test_v0_compat_no_synth_no_next_config(
     for c in result.candidates:
         assert c.next_config is None
         assert c.policy is None
+
+
+# ---------- intent.description → synthesizer (category 회귀 방지) ----------
+
+
+async def test_v1_synth_receives_intent_description(
+    seeded: tuple[InMemoryEvidenceStore, InMemoryVectorIndex],
+) -> None:
+    """intent.description(extra='allow')이 synthesizer 프롬프트로 흐른다.
+
+    버그: 기존엔 query.intent.goal("exploration")만 synth에 전달돼 실제 의도(카테고리·
+    방향)가 합성에서 사라지고 corpus 과거 분포로 회귀했다. description을 함께 넘겨
+    LLM이 카테고리/방향을 반영하게 한다.
+    """
+    store, index = seeded
+    captured: dict[str, str] = {}
+
+    class _CaptureLLM:
+        async def complete(self, prompt: str) -> str:
+            captured["prompt"] = prompt
+            return ('{"recipe_id": "<ignored>", '
+                    '"next_config": {"max_depth": 7}, "reasoning": "r"}')
+
+    service = MatchmakerService(
+        embedder=_OkEmbedder(),
+        vector_index=index,
+        reranker=_UnusedReranker(),
+        store=store,
+        infogain_reranker=InfoGainReranker(llm=_StubPriorLLM()),
+        policy=FixedEpsilonPolicy(eps=0.0),  # 항상 exploit → within_synth
+        within_synth=WithinRecipeSynthesizer(llm=_CaptureLLM()),
+        novelty_synth=NoveltyRecipeSynthesizer(llm=_CaptureLLM()),
+    )
+    query = QueryFeatures.model_validate(
+        {
+            "worker_spec": {"cpu_cores": 16, "ram_gb": 32, "has_gpu": False},
+            "data_fingerprint": {"modality": "tabular", "sample_count_band": "10k-100k"},
+            "intent": {
+                "goal": "exploration",
+                "description": "MVTec screw anomaly detection, beat 0.86",
+                "expected_baseline": {"metric": "AUC"},
+                "tolerance": {"direction": "higher_is_better"},
+            },
+        }
+    )
+    await service.recommend(query, round_id="r-1")
+    assert "screw" in captured["prompt"].lower()
