@@ -47,7 +47,8 @@ def build_command(requirements: list[str]) -> str:
     train.py가 describe.json 저장. 정본 경로라 pcq>=4.11.0 강제. stdout(@metric)은
     cq metric writer로 직접, stderr만 train_err.log로 분리(2>)."""
     reqs = ["pcq>=4.11.0", *[r for r in requirements if _REQ_RE.match(r)]]
-    with_flags = " ".join(f"--with {r}" for r in reqs)
+    # 작은따옴표 필수 — pcq>=4.11.0의 '>'가 쉘 리다이렉트로 깨지는 것 방지
+    with_flags = " ".join(f"--with '{r}'" for r in reqs)
     return ('export PATH="/usr/local/bin:$HOME/.local/bin:$PATH" '
             "&& export CQ_CONFIG_JSON=cq_config.json "
             f"&& uv run --no-project {with_flags} python -u train.py 2> train_err.log")

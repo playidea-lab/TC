@@ -1,0 +1,26 @@
+{
+  "experiment": "pcq-cq-tc 5h closed-loop robustness (MVTec bottle -> screw)",
+  "started_at": "2026-05-23T02:22:00+00:00",
+  "last_round": 9,
+  "last_evidence_id": "ev-r9-patchcore-screw-m100k-001",
+  "best_evidence_id": "ev-r3-efficientad-001",
+  "best_metric": 1.0,
+  "active_category": "screw",
+  "screw_best_metric": 0.9643,
+  "screw_best_evidence": "ev-r9-patchcore-screw-m100k-001",
+  "n_success": 10,
+  "n_fail": 0,
+  "loop_note": "tc_recommend는 corpus 미반영(real_count 정체, bottle/AE 회귀). tc_recent_attempts(환류) 정확 → 환류 기반 agent closure. screw 추격: 0.86(ST)->0.91(PC m50k)->0.9463(PC 512)->0.9643(PC m100k, SOTA 돌파).",
+  "history": [
+    {"round": 1, "evidence_id": "ev-trivial-meanmse-0001-4ea349", "recipe_id": "trivial", "category": "bottle", "ok": true, "metrics": {"image_auroc": 0.8413}, "ts": "2026-05-22T22:58:24+00:00"},
+    {"round": "smoke", "evidence_id": "ev-smoke-ae-001", "recipe_id": "mvtec-autoencoder", "category": "bottle", "ok": true, "metrics": {"image_auroc": 0.419}, "ts": "2026-05-23T02:23:25+00:00"},
+    {"round": 2, "evidence_id": "ev-r2-ae-001", "recipe_id": "mvtec-autoencoder", "category": "bottle", "ok": true, "metrics": {"image_auroc": 0.65}, "branch": "exploit", "note": "underfit 인식 후 capacity 증가", "ts": "2026-05-23T02:30:00+00:00"},
+    {"round": 3, "evidence_id": "ev-r3-efficientad-001", "recipe_id": "mvtec-efficientad", "category": "bottle", "ok": true, "metrics": {"image_auroc": 1.0}, "config": {"backbone": "resnet18", "method": "student_teacher"}, "branch": "exploit", "note": "과거 실패 traceback 인식 후 recipe 전환 + self-correct; 1.0", "ts": "2026-05-23T02:39:04+00:00"},
+    {"round": 4, "evidence_id": "ev-r4-efficientad-wrn-001", "recipe_id": "mvtec-efficientad", "category": "bottle", "ok": true, "metrics": {"image_auroc": 1.0}, "config": {"backbone": "wide_resnet50_2"}, "branch": "exploit", "note": "backbone 확대 exploit; 1.0", "ts": "2026-05-23T02:45:11+00:00"},
+    {"round": 5, "evidence_id": "ev-r5-screw-stfpm-001", "recipe_id": "mvtec-efficientad", "category": "screw", "ok": true, "metrics": {"image_auroc": 0.8608}, "config": {"img_size": 384, "method": "student_teacher"}, "branch": "exploit", "note": "screw 전환 baseline", "ts": "2026-05-25T06:44:55+00:00"},
+    {"round": 6, "evidence_id": "ev-r6-patchcore-screw-001", "recipe_id": "mvtec-patchcore", "category": "screw", "ok": true, "metrics": {"image_auroc": 0.7465}, "config": {"img_size": 384, "memory_size": 10000}, "branch": "exploit", "note": "PatchCore memory 10k 부족", "ts": "2026-05-25T06:49:48+00:00"},
+    {"round": 7, "evidence_id": "ev-r7-patchcore-screw-m50k-001", "recipe_id": "mvtec-patchcore", "category": "screw", "ok": true, "metrics": {"image_auroc": 0.9106}, "config": {"img_size": 384, "memory_size": 50000}, "branch": "exploit", "note": "memory 50k로 0.91, ST 추월", "ts": "2026-05-25T06:51:41+00:00"},
+    {"round": 8, "evidence_id": "ev-r8-patchcore-screw-512-001", "recipe_id": "mvtec-patchcore", "category": "screw", "ok": true, "metrics": {"image_auroc": 0.9463}, "config": {"img_size": 512, "memory_size": 50000}, "branch": "exploit", "note": "img_size 512로 0.9463", "ts": "2026-05-25T06:53:56+00:00"},
+    {"round": 9, "evidence_id": "ev-r9-patchcore-screw-m100k-001", "recipe_id": "mvtec-patchcore", "category": "screw", "ok": true, "metrics": {"image_auroc": 0.9643}, "config": {"img_size": 512, "memory_size": 100000}, "branch": "exploit", "note": "memory 100k로 0.9643, screw SOTA 돌파", "ts": "2026-05-25T06:56:14+00:00"}
+  ]
+}
