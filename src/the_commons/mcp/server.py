@@ -47,8 +47,14 @@ _DEFAULT_TIMEOUT = 60.0
 
 def _issue_jwt(*, ttl_secs: int = 3600) -> str:
     now = int(time.time())
-    payload = {"sub": CONTRIB_ID, "iss": JWT_ISS, "aud": JWT_AUD,
-               "iat": now, "exp": now + ttl_secs, "origin": "internal"}
+    payload = {
+        "sub": CONTRIB_ID,
+        "iss": JWT_ISS,
+        "aud": JWT_AUD,
+        "iat": now,
+        "exp": now + ttl_secs,
+        "origin": "internal",
+    }
     return jwt.encode(payload, Path(JWT_PRIV_PATH).read_bytes(), algorithm="RS256")
 
 
@@ -60,15 +66,23 @@ def _worker_spec() -> dict[str, Any]:
     return {"cpu_cores": 8, "ram_gb": 16, "gpu_model": "apple-mps", "vram_gb": 0, "has_gpu": False}
 
 
-def _build_query(intent: str, modality: str, primary_metric: str, baseline: float) -> dict[str, Any]:
+def _build_query(
+    intent: str, modality: str, primary_metric: str, baseline: float
+) -> dict[str, Any]:
     """recommend query — worker_spec + data_fingerprint + intent."""
     return {
         "worker_spec": _worker_spec(),
-        "data_fingerprint": {"modality": modality, "sample_count_band": "100-1k",
-                             "schema_summary": {}},
-        "intent": {"goal": "exploration", "description": intent,
-                   "expected_baseline": {"metric": primary_metric, "value": baseline},
-                   "tolerance": {"direction": "higher_is_better", "margin": 0.02}},
+        "data_fingerprint": {
+            "modality": modality,
+            "sample_count_band": "100-1k",
+            "schema_summary": {},
+        },
+        "intent": {
+            "goal": "exploration",
+            "description": intent,
+            "expected_baseline": {"metric": primary_metric, "value": baseline},
+            "tolerance": {"direction": "higher_is_better", "margin": 0.02},
+        },
     }
 
 
@@ -77,9 +91,17 @@ def _build_query(intent: str, modality: str, primary_metric: str, baseline: floa
 # ----------------------------------------------------------------------------
 
 
-async def _post_recommend(client: httpx.AsyncClient, token: str, *, intent: str,
-                          modality: str, primary_metric: str, baseline: float,
-                          force_explore: bool, round_id: str | None) -> dict[str, Any]:
+async def _post_recommend(
+    client: httpx.AsyncClient,
+    token: str,
+    *,
+    intent: str,
+    modality: str,
+    primary_metric: str,
+    baseline: float,
+    force_explore: bool,
+    round_id: str | None,
+) -> dict[str, Any]:
     """TC /recommend → top 방향(recipe_id + next_config + reasoning) + corpus."""
     body: dict[str, Any] = {
         "query": _build_query(intent, modality, primary_metric, baseline),
@@ -102,9 +124,15 @@ async def _post_recommend(client: httpx.AsyncClient, token: str, *, intent: str,
     }
 
 
-async def _get_recent_attempts(client: httpx.AsyncClient, token: str, *, modality: str,
-                               limit: int, recipe_id: str | None,
-                               failed_only: bool) -> list[dict[str, Any]]:
+async def _get_recent_attempts(
+    client: httpx.AsyncClient,
+    token: str,
+    *,
+    modality: str,
+    limit: int,
+    recipe_id: str | None,
+    failed_only: bool,
+) -> list[dict[str, Any]]:
     """TC /evidence(list) → 환류 요약 {evidence_id, recipe_id, ok, metrics, stderr_tail}.
 
     코드 본문은 제외(컨텍스트 절약) — 필요하면 tc_get_evidence로 on-demand.
@@ -122,13 +150,15 @@ async def _get_recent_attempts(client: httpx.AsyncClient, token: str, *, modalit
         failed = bool(metrics.get("failed"))
         if failed_only and not failed:
             continue
-        out.append({
-            "evidence_id": ev.get("evidence_id"),
-            "recipe_id": rid,
-            "ok": not failed,
-            "metrics": {k: v for k, v in metrics.items() if k not in ("failed", "stderr_tail")},
-            "stderr_tail": metrics.get("stderr_tail"),
-        })
+        out.append(
+            {
+                "evidence_id": ev.get("evidence_id"),
+                "recipe_id": rid,
+                "ok": not failed,
+                "metrics": {k: v for k, v in metrics.items() if k not in ("failed", "stderr_tail")},
+                "stderr_tail": metrics.get("stderr_tail"),
+            }
+        )
         if len(out) >= limit:
             break
     return out
@@ -142,7 +172,11 @@ async def _get_evidence(client: httpx.AsyncClient, token: str, evidence_id: str)
 
 
 async def _get_knowledge_trends(
-    client: httpx.AsyncClient, token: str, *, modality: str, metric: str,
+    client: httpx.AsyncClient,
+    token: str,
+    *,
+    modality: str,
+    metric: str,
     recipe_id: str | None = None,
 ) -> list[dict[str, Any]]:
     """corpus(/evidence)를 받아 recipe별 numeric config 축의 metric 추세를 순수계산.
@@ -167,8 +201,7 @@ async def _get_knowledge_trends(
             "group": rt.group,
             "metric": rt.metric,
             "axes": [
-                {"axis": a.axis, "direction": a.direction,
-                 "points": [list(p) for p in a.points]}
+                {"axis": a.axis, "direction": a.direction, "points": [list(p) for p in a.points]}
                 for a in rt.axes
             ],
         }
@@ -177,7 +210,12 @@ async def _get_knowledge_trends(
 
 
 async def _get_lineage(
-    client: httpx.AsyncClient, token: str, *, evidence_id: str, modality: str, metric: str,
+    client: httpx.AsyncClient,
+    token: str,
+    *,
+    evidence_id: str,
+    modality: str,
+    metric: str,
 ) -> list[dict[str, Any]]:
     """corpus(/evidence)를 받아 evidence_id의 derives_from 조상 사슬을 순회(순수계산)."""
     params = {"modality": modality, "limit": 100, "deprecated": "false"}
@@ -186,7 +224,9 @@ async def _get_lineage(
     return trace_lineage(r.json().get("evidences", []), evidence_id, metric=metric)
 
 
-async def _post_ingest_run(client: httpx.AsyncClient, token: str, *, envelope: dict[str, Any]) -> str:
+async def _post_ingest_run(
+    client: httpx.AsyncClient, token: str, *, envelope: dict[str, Any]
+) -> str:
     """조립된 envelope을 TC /ingest로 적재 → evidence_id."""
     r = await client.post(f"{TC_URL}/ingest", json={"evidence": envelope}, headers=_headers(token))
     r.raise_for_status()
@@ -201,30 +241,51 @@ mcp = FastMCP("the-commons")
 
 
 @mcp.tool()
-async def tc_recommend(intent: str, modality: str = "vision",
-                       primary_metric: str = "image_auroc", baseline: float = 0.9,
-                       force_explore: bool = False, round_id: str | None = None) -> dict[str, Any]:
+async def tc_recommend(
+    intent: str,
+    modality: str = "vision",
+    primary_metric: str = "image_auroc",
+    baseline: float = 0.9,
+    force_explore: bool = False,
+    round_id: str | None = None,
+) -> dict[str, Any]:
     """corpus 정보이득 기반 다음 실험 방향(recipe_id + next_config + reasoning)을 추천.
 
     코드는 생성하지 않는다 — recipe_id를 보고 Claude Code가 train.py를 작성한다.
     force_explore=True면 corpus 밖 novelty(Gemini grounding)를 강제한다."""
     async with httpx.AsyncClient(timeout=_RECOMMEND_TIMEOUT) as c:
-        return await _post_recommend(c, _issue_jwt(), intent=intent, modality=modality,
-                                     primary_metric=primary_metric, baseline=baseline,
-                                     force_explore=force_explore, round_id=round_id)
+        return await _post_recommend(
+            c,
+            _issue_jwt(),
+            intent=intent,
+            modality=modality,
+            primary_metric=primary_metric,
+            baseline=baseline,
+            force_explore=force_explore,
+            round_id=round_id,
+        )
 
 
 @mcp.tool()
-async def tc_recent_attempts(modality: str = "vision", limit: int = 8,
-                             recipe_id: str | None = None,
-                             failed_only: bool = False) -> list[dict[str, Any]]:
+async def tc_recent_attempts(
+    modality: str = "vision",
+    limit: int = 8,
+    recipe_id: str | None = None,
+    failed_only: bool = False,
+) -> list[dict[str, Any]]:
     """최근 실험 시도 요약(환류) — {evidence_id, recipe_id, ok, metrics, stderr_tail}.
 
     self-correct: failed_only=True로 최근 실패의 traceback을 본다. 코드 본문은
     tc_get_evidence로 on-demand. recipe_id로 한 recipe 이력만 좁힐 수 있다."""
     async with httpx.AsyncClient(timeout=_DEFAULT_TIMEOUT) as c:
-        return await _get_recent_attempts(c, _issue_jwt(), modality=modality, limit=limit,
-                                          recipe_id=recipe_id, failed_only=failed_only)
+        return await _get_recent_attempts(
+            c,
+            _issue_jwt(),
+            modality=modality,
+            limit=limit,
+            recipe_id=recipe_id,
+            failed_only=failed_only,
+        )
 
 
 @mcp.tool()
@@ -236,8 +297,9 @@ async def tc_get_evidence(evidence_id: str) -> dict[str, Any]:
 
 
 @mcp.tool()
-async def tc_knowledge(modality: str = "vision", metric: str = "image_auroc",
-                       recipe_id: str | None = None) -> list[dict[str, Any]]:
+async def tc_knowledge(
+    modality: str = "vision", metric: str = "image_auroc", recipe_id: str | None = None
+) -> list[dict[str, Any]]:
     """누적 corpus에서 recipe별 config 축의 metric 추세(귀납지식)를 순수계산해 반환.
 
     환류 2단계 — tc_recent_attempts가 '사실(개별 시도)'이면 tc_knowledge는 '교훈':
@@ -245,28 +307,36 @@ async def tc_knowledge(modality: str = "vision", metric: str = "image_auroc",
     (축값, metric) 점들. LLM 없는 순수 계산이라 결정론적. **처방(next_config)은 없다 —
     "memory↑→auroc↑"까지가 시스템, "그러니 더 키울까/천장이니 딴 거" 판단은 에이전트."""
     async with httpx.AsyncClient(timeout=_DEFAULT_TIMEOUT) as c:
-        return await _get_knowledge_trends(c, _issue_jwt(), modality=modality,
-                                           metric=metric, recipe_id=recipe_id)
+        return await _get_knowledge_trends(
+            c, _issue_jwt(), modality=modality, metric=metric, recipe_id=recipe_id
+        )
 
 
 @mcp.tool()
-async def tc_lineage(evidence_id: str, modality: str = "vision",
-                     metric: str = "image_auroc") -> list[dict[str, Any]]:
+async def tc_lineage(
+    evidence_id: str, modality: str = "vision", metric: str = "image_auroc"
+) -> list[dict[str, Any]]:
     """한 evidence의 계보(derives_from 조상 사슬)를 추격 궤적으로 반환.
 
     교훈노트 보완 — tc_knowledge 추세가 '무엇이 좋아졌나'면, 계보는 '어떤 경로로 거기
     왔나'다. [start, parent, grandparent, ...] 각 {evidence_id, recipe_id, metric}.
     순수 계산(LLM 없음). 순환·누락에 안전."""
     async with httpx.AsyncClient(timeout=_DEFAULT_TIMEOUT) as c:
-        return await _get_lineage(c, _issue_jwt(), evidence_id=evidence_id,
-                                  modality=modality, metric=metric)
+        return await _get_lineage(
+            c, _issue_jwt(), evidence_id=evidence_id, modality=modality, metric=metric
+        )
 
 
 @mcp.tool()
-async def tc_ingest_pcq(describe: dict[str, Any], recipe_id: str,
-                        evidence_id: str | None = None, modality: str = "vision",
-                        sample_count_band: str = "100-1k",
-                        lineage_target: str | None = None, branch: str = "manual") -> str:
+async def tc_ingest_pcq(
+    describe: dict[str, Any],
+    recipe_id: str,
+    evidence_id: str | None = None,
+    modality: str = "vision",
+    sample_count_band: str = "100-1k",
+    lineage_target: str | None = None,
+    branch: str = "manual",
+) -> str:
     """pcq `describe_run` 결과를 TC에 적재 → evidence_id (pcq 정본 경로).
 
     pcq가 만든 계약(describe)을 받아 TC evidence로 변환·저장한다 — agent는 봉투를
@@ -274,9 +344,15 @@ async def tc_ingest_pcq(describe: dict[str, Any], recipe_id: str,
     within_synth로 흐른다. evidence_id 미지정 시 자동 생성. TC의 유일한 적재 경로 —
     모든 evidence는 pcq describe(train.py 실측 effective)에서 온다."""
     eid = evidence_id or f"ev-{recipe_id}-{uuid.uuid4().hex[:8]}"
-    env = describe_to_evidence(describe, evidence_id=eid, recipe_id=recipe_id,
-                               modality=modality, sample_count_band=sample_count_band,
-                               lineage_target=lineage_target, branch=branch)
+    env = describe_to_evidence(
+        describe,
+        evidence_id=eid,
+        recipe_id=recipe_id,
+        modality=modality,
+        sample_count_band=sample_count_band,
+        lineage_target=lineage_target,
+        branch=branch,
+    )
     async with httpx.AsyncClient(timeout=_DEFAULT_TIMEOUT) as c:
         return await _post_ingest_run(c, _issue_jwt(), envelope=env)
 

@@ -31,19 +31,33 @@ def _client(handler) -> httpx.AsyncClient:  # noqa: ANN001
 async def test_recommend_extracts_top_direction() -> None:
     def handler(req: httpx.Request) -> httpx.Response:
         assert req.url.path == "/recommend"
-        return httpx.Response(200, json={
-            "candidates": [
-                {"recipe_id": "patchcore", "next_config": {"lr": 0.001},
-                 "reasoning": "top", "policy": {"branch": "exploit"}},
-                {"recipe_id": "efficientad"},
-            ],
-            "corpus_context": {"real_count": 20, "synthetic_count": 0},
-        })
+        return httpx.Response(
+            200,
+            json={
+                "candidates": [
+                    {
+                        "recipe_id": "patchcore",
+                        "next_config": {"lr": 0.001},
+                        "reasoning": "top",
+                        "policy": {"branch": "exploit"},
+                    },
+                    {"recipe_id": "efficientad"},
+                ],
+                "corpus_context": {"real_count": 20, "synthetic_count": 0},
+            },
+        )
 
     async with _client(handler) as c:
-        out = await _post_recommend(c, "t", intent="x", modality="vision",
-                                    primary_metric="image_auroc", baseline=0.9,
-                                    force_explore=False, round_id=None)
+        out = await _post_recommend(
+            c,
+            "t",
+            intent="x",
+            modality="vision",
+            primary_metric="image_auroc",
+            baseline=0.9,
+            force_explore=False,
+            round_id=None,
+        )
     assert out["recipe_id"] == "patchcore"
     assert out["next_config"] == {"lr": 0.001}
     assert out["alternatives"] == ["efficientad"]
@@ -55,9 +69,16 @@ async def test_recommend_empty_candidates_safe() -> None:
         return httpx.Response(200, json={"candidates": [], "corpus_context": {"real_count": 0}})
 
     async with _client(handler) as c:
-        out = await _post_recommend(c, "t", intent="x", modality="vision",
-                                    primary_metric="image_auroc", baseline=0.9,
-                                    force_explore=False, round_id=None)
+        out = await _post_recommend(
+            c,
+            "t",
+            intent="x",
+            modality="vision",
+            primary_metric="image_auroc",
+            baseline=0.9,
+            force_explore=False,
+            round_id=None,
+        )
     assert out["recipe_id"] is None  # 빈 corpus에도 안전
 
 
@@ -65,20 +86,31 @@ async def test_recommend_empty_candidates_safe() -> None:
 
 
 def _ev(eid: str, recipe: str, *, failed: bool = False, auc: float = 0.8) -> dict:
-    metrics = {"failed": True, "stderr_tail": "ModuleNotFound: torch"} if failed else {"image_auroc": auc}
+    metrics = (
+        {"failed": True, "stderr_tail": "ModuleNotFound: torch"} if failed else {"image_auroc": auc}
+    )
     return {"evidence_id": eid, "pcq_record": {"config": {"recipe_id": recipe}, "metrics": metrics}}
 
 
 async def test_recent_attempts_failed_only_filters() -> None:
     def handler(req: httpx.Request) -> httpx.Response:
-        return httpx.Response(200, json={"evidences": [
-            _ev("ev-1", "rf", auc=0.8),
-            _ev("ev-2", "xgb", failed=True),
-        ], "total": 2, "limit": 20, "offset": 0})
+        return httpx.Response(
+            200,
+            json={
+                "evidences": [
+                    _ev("ev-1", "rf", auc=0.8),
+                    _ev("ev-2", "xgb", failed=True),
+                ],
+                "total": 2,
+                "limit": 20,
+                "offset": 0,
+            },
+        )
 
     async with _client(handler) as c:
-        out = await _get_recent_attempts(c, "t", modality="vision", limit=8,
-                                         recipe_id=None, failed_only=True)
+        out = await _get_recent_attempts(
+            c, "t", modality="vision", limit=8, recipe_id=None, failed_only=True
+        )
     assert len(out) == 1
     assert out[0]["evidence_id"] == "ev-2"
     assert out[0]["ok"] is False
@@ -87,13 +119,23 @@ async def test_recent_attempts_failed_only_filters() -> None:
 
 async def test_recent_attempts_recipe_filter() -> None:
     def handler(req: httpx.Request) -> httpx.Response:
-        return httpx.Response(200, json={"evidences": [
-            _ev("ev-1", "rf"), _ev("ev-2", "xgb"),
-        ], "total": 2, "limit": 20, "offset": 0})
+        return httpx.Response(
+            200,
+            json={
+                "evidences": [
+                    _ev("ev-1", "rf"),
+                    _ev("ev-2", "xgb"),
+                ],
+                "total": 2,
+                "limit": 20,
+                "offset": 0,
+            },
+        )
 
     async with _client(handler) as c:
-        out = await _get_recent_attempts(c, "t", modality="vision", limit=8,
-                                         recipe_id="xgb", failed_only=False)
+        out = await _get_recent_attempts(
+            c, "t", modality="vision", limit=8, recipe_id="xgb", failed_only=False
+        )
     assert len(out) == 1
     assert out[0]["recipe_id"] == "xgb"
     assert "failed" not in out[0]["metrics"]  # 요약 metrics에서 failed/stderr 제외
@@ -105,11 +147,32 @@ async def test_recent_attempts_recipe_filter() -> None:
 async def test_knowledge_trends_computes_monotonic_from_corpus() -> None:
     def handler(req: httpx.Request) -> httpx.Response:
         assert req.url.path == "/evidence"
-        return httpx.Response(200, json={"evidences": [
-            {"pcq_record": {"config": {"recipe_id": "pc", "memory_size": 10000}, "metrics": {"image_auroc": 0.74}}},
-            {"pcq_record": {"config": {"recipe_id": "pc", "memory_size": 50000}, "metrics": {"image_auroc": 0.91}}},
-            {"pcq_record": {"config": {"recipe_id": "pc", "memory_size": 100000}, "metrics": {"image_auroc": 0.96}}},
-        ], "total": 3})
+        return httpx.Response(
+            200,
+            json={
+                "evidences": [
+                    {
+                        "pcq_record": {
+                            "config": {"recipe_id": "pc", "memory_size": 10000},
+                            "metrics": {"image_auroc": 0.74},
+                        }
+                    },
+                    {
+                        "pcq_record": {
+                            "config": {"recipe_id": "pc", "memory_size": 50000},
+                            "metrics": {"image_auroc": 0.91},
+                        }
+                    },
+                    {
+                        "pcq_record": {
+                            "config": {"recipe_id": "pc", "memory_size": 100000},
+                            "metrics": {"image_auroc": 0.96},
+                        }
+                    },
+                ],
+                "total": 3,
+            },
+        )
 
     async with _client(handler) as c:
         out = await _get_knowledge_trends(c, "t", modality="vision", metric="image_auroc")
@@ -122,16 +185,43 @@ async def test_knowledge_trends_computes_monotonic_from_corpus() -> None:
 
 async def test_knowledge_trends_recipe_filter() -> None:
     def handler(req: httpx.Request) -> httpx.Response:
-        return httpx.Response(200, json={"evidences": [
-            {"pcq_record": {"config": {"recipe_id": "pc", "memory_size": 1}, "metrics": {"image_auroc": 0.5}}},
-            {"pcq_record": {"config": {"recipe_id": "pc", "memory_size": 2}, "metrics": {"image_auroc": 0.6}}},
-            {"pcq_record": {"config": {"recipe_id": "ae", "latent_dim": 64}, "metrics": {"image_auroc": 0.4}}},
-            {"pcq_record": {"config": {"recipe_id": "ae", "latent_dim": 128}, "metrics": {"image_auroc": 0.3}}},
-        ], "total": 4})
+        return httpx.Response(
+            200,
+            json={
+                "evidences": [
+                    {
+                        "pcq_record": {
+                            "config": {"recipe_id": "pc", "memory_size": 1},
+                            "metrics": {"image_auroc": 0.5},
+                        }
+                    },
+                    {
+                        "pcq_record": {
+                            "config": {"recipe_id": "pc", "memory_size": 2},
+                            "metrics": {"image_auroc": 0.6},
+                        }
+                    },
+                    {
+                        "pcq_record": {
+                            "config": {"recipe_id": "ae", "latent_dim": 64},
+                            "metrics": {"image_auroc": 0.4},
+                        }
+                    },
+                    {
+                        "pcq_record": {
+                            "config": {"recipe_id": "ae", "latent_dim": 128},
+                            "metrics": {"image_auroc": 0.3},
+                        }
+                    },
+                ],
+                "total": 4,
+            },
+        )
 
     async with _client(handler) as c:
-        out = await _get_knowledge_trends(c, "t", modality="vision",
-                                          metric="image_auroc", recipe_id="ae")
+        out = await _get_knowledge_trends(
+            c, "t", modality="vision", metric="image_auroc", recipe_id="ae"
+        )
     assert len(out) == 1
     assert out[0]["recipe_id"] == "ae"
     axes = {a["axis"]: a for a in out[0]["axes"]}
@@ -144,12 +234,23 @@ async def test_lineage_traces_ancestor_chain() -> None:
 
         def ev(eid: str, parent: str | None) -> dict:
             lin = [{"type": "derives_from", "target_evidence_id": parent}] if parent else []
-            return {"evidence_id": eid, "lineage": lin, "pcq_record": {
-                "config": {"recipe_id": "pc"}, "metrics": {"image_auroc": 0.9}}}
+            return {
+                "evidence_id": eid,
+                "lineage": lin,
+                "pcq_record": {"config": {"recipe_id": "pc"}, "metrics": {"image_auroc": 0.9}},
+            }
 
-        return httpx.Response(200, json={"evidences": [
-            ev("r9", "r8"), ev("r8", "r7"), ev("r7", None),
-        ], "total": 3})
+        return httpx.Response(
+            200,
+            json={
+                "evidences": [
+                    ev("r9", "r8"),
+                    ev("r8", "r7"),
+                    ev("r7", None),
+                ],
+                "total": 3,
+            },
+        )
 
     async with _client(handler) as c:
         out = await _get_lineage(c, "t", evidence_id="r9", modality="vision", metric="image_auroc")
@@ -162,10 +263,15 @@ async def test_lineage_traces_ancestor_chain() -> None:
 async def test_get_evidence_returns_full_with_code() -> None:
     def handler(req: httpx.Request) -> httpx.Response:
         assert req.url.path == "/evidence/ev-x"
-        return httpx.Response(200, json={"evidence": {
-            "evidence_id": "ev-x",
-            "pcq_record": {"code": {"content": "print('@image_auroc=0.8')"}},
-        }})
+        return httpx.Response(
+            200,
+            json={
+                "evidence": {
+                    "evidence_id": "ev-x",
+                    "pcq_record": {"code": {"content": "print('@image_auroc=0.8')"}},
+                }
+            },
+        )
 
     async with _client(handler) as c:
         ev = await _get_evidence(c, "t", "ev-x")
@@ -183,8 +289,11 @@ async def test_post_ingest_run_posts_envelope_returns_id() -> None:
         captured["body"] = json.loads(req.content)
         return httpx.Response(201, json={"evidence_id": "ev-new", "tier": "real"})
 
-    env = {"evidence_id": "ev-new", "tier": "real",
-           "pcq_record": {"config": {"recipe_id": "patchcore", "lr": 0.001}}}
+    env = {
+        "evidence_id": "ev-new",
+        "tier": "real",
+        "pcq_record": {"config": {"recipe_id": "patchcore", "lr": 0.001}},
+    }
     async with _client(handler) as c:
         eid = await _post_ingest_run(c, "t", envelope=env)
     assert eid == "ev-new"

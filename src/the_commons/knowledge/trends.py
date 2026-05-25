@@ -48,7 +48,8 @@ def _is_numeric(value: object) -> bool:
 
 def _direction(metrics_in_axis_order: list[float]) -> str:
     """축값 오름차순으로 정렬된 metric 수열의 단조성."""
-    diffs = [b - a for a, b in zip(metrics_in_axis_order, metrics_in_axis_order[1:])]
+    pairs = zip(metrics_in_axis_order, metrics_in_axis_order[1:], strict=False)
+    diffs = [b - a for a, b in pairs]
     if all(d >= 0 for d in diffs):
         return "increasing"
     if all(d <= 0 for d in diffs):
@@ -57,7 +58,9 @@ def _direction(metrics_in_axis_order: list[float]) -> str:
 
 
 def summarize_trends(
-    samples: list[Sample], metric: str, *,
+    samples: list[Sample],
+    metric: str,
+    *,
     group_axes: tuple[str, ...] = _DEFAULT_GROUP_AXES,
 ) -> list[RecipeTrend]:
     """(recipe, target group)별로 numeric config 축의 metric 추세를 계산한다.
