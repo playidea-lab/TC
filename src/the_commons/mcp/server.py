@@ -148,7 +148,8 @@ async def _get_knowledge_trends(
 
     LLM 없음 — evidence_to_sample(어댑터) → summarize_trends(순수계산). 처방 없이 사실
     (추세: increasing/decreasing/non_monotonic)만. 판단은 에이전트가 한다(KR6)."""
-    params = {"modality": modality, "limit": 200, "deprecated": "false"}
+    # /evidence는 limit<=100 (엔드포인트 검증). 최근 100건으로 추세 — 더 필요하면 페이지네이션(차후)
+    params = {"modality": modality, "limit": 100, "deprecated": "false"}
     r = await client.get(f"{TC_URL}/evidence", params=params, headers=_headers(token))
     r.raise_for_status()
     samples = []
