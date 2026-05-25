@@ -21,12 +21,12 @@ from torch.utils.data import DataLoader, Dataset
 import pcq
 from pcq.agent.describe import describe_run
 
-DATA_ROOT = os.environ.get(
-    "DATA_ROOT", "/Users/changmin/datasets/MVtec-ad/mvtec_anomaly_detection")
-CATEGORY = "bottle"
-
 # CQ_CONFIG_JSON 주입값 (next_config + smoke override)
 cfg = pcq.config()
+# 데이터 루트·category 파라미터화 — cfg.data_root(신규 규약) 우선, 없으면 env DATA_ROOT
+DATA_ROOT = str(cfg.get("data_root") or os.environ.get(
+    "DATA_ROOT", "/Users/changmin/datasets/MVtec-ad/mvtec_anomaly_detection"))
+CATEGORY = str(cfg.get("category", "bottle"))
 lr = float(cfg.get("learning_rate", 0.0005))
 latent_dim = int(cfg.get("latent_dim", 64))
 optimizer_name = str(cfg.get("optimizer", "Adam"))
