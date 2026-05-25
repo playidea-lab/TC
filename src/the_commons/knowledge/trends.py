@@ -18,6 +18,9 @@ Sample = tuple[str, dict, dict]
 # 추세를 낼 만한 최소 유니크 축값 수 (1개면 비교 불가)
 _MIN_UNIQUE_POINTS = 2
 
+# 그룹 분리 기준 축(target) 기본값 — category별로 묶어 난이도 교란(confounding)을 막는다
+_DEFAULT_GROUP_AXES = ("category",)
+
 
 @dataclass(frozen=True)
 class AxisTrend:
@@ -30,9 +33,10 @@ class AxisTrend:
 
 @dataclass(frozen=True)
 class RecipeTrend:
-    """한 recipe의 축별 추세 묶음."""
+    """한 (recipe, target group)의 축별 추세 묶음."""
 
     recipe_id: str
+    group: dict[str, object]  # target 축 값 (예: {"category": "screw"}) — 그룹 분리 기준
     metric: str
     axes: tuple[AxisTrend, ...]
 
@@ -52,39 +56,48 @@ def _direction(metrics_in_axis_order: list[float]) -> str:
     return "non_monotonic"
 
 
-def summarize_trends(samples: list[Sample], metric: str) -> list[RecipeTrend]:
-    """recipe별로 numeric config 축의 metric 추세를 계산한다.
+def summarize_trends(
+    samples: list[Sample], metric: str, *,
+    group_axes: tuple[str, ...] = _DEFAULT_GROUP_AXES,
+) -> list[RecipeTrend]:
+    """(recipe, target group)별로 numeric config 축의 metric 추세를 계산한다.
 
-    유니크 축값이 2개 미만인 축(고정값 등)은 추세가 무의미하므로 제외한다.
+    group_axes(target 축, 예: category)는 그룹 분리 기준 — 추세 축에서 제외해 난이도 등
+    교란(confounding, 예: bottle 쉬움 vs screw 어려움)을 막는다. 같은 축값이 여러 번(다른
+    축 변화) 나오면 best(max)로 집계한다. 유니크 축값 2개 미만인 축은 제외한다.
     """
-    by_recipe: dict[str, list[Sample]] = defaultdict(list)
-    for sample in samples:
-        by_recipe[sample[0]].append(sample)
+    grouped: dict[tuple, list[tuple[dict, dict]]] = defaultdict(list)
+    for recipe_id, config, metrics in samples:
+        gkey = tuple(config.get(g) for g in group_axes)
+        grouped[(recipe_id, gkey)].append((config, metrics))
 
     result: list[RecipeTrend] = []
-    for recipe_id, group in by_recipe.items():
+    for (recipe_id, gkey), members in grouped.items():
+        group = dict(zip(group_axes, gkey, strict=False))
         axis_keys = {
             key
-            for _, config, _ in group
+            for config, _ in members
             for key, value in config.items()
-            if _is_numeric(value)
+            if _is_numeric(value) and key not in group_axes
         }
         axes: list[AxisTrend] = []
         for axis in sorted(axis_keys):
-            points = [
-                (float(config[axis]), float(metrics[metric]))
-                for _, config, metrics in group
-                if axis in config and metric in metrics
-            ]
-            if len({x for x, _ in points}) < _MIN_UNIQUE_POINTS:
+            best_by_x: dict[float, float] = {}
+            for config, metrics in members:
+                if axis in config and _is_numeric(config[axis]) and metric in metrics:
+                    x, y = float(config[axis]), float(metrics[metric])
+                    best_by_x[x] = max(best_by_x[x], y) if x in best_by_x else y
+            if len(best_by_x) < _MIN_UNIQUE_POINTS:
                 continue
-            points.sort(key=lambda p: p[0])
+            points = tuple(sorted(best_by_x.items()))
             axes.append(
                 AxisTrend(
                     axis=axis,
                     direction=_direction([y for _, y in points]),
-                    points=tuple(points),
+                    points=points,
                 )
             )
-        result.append(RecipeTrend(recipe_id=recipe_id, metric=metric, axes=tuple(axes)))
+        result.append(
+            RecipeTrend(recipe_id=recipe_id, group=group, metric=metric, axes=tuple(axes))
+        )
     return result

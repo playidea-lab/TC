@@ -163,6 +163,7 @@ async def _get_knowledge_trends(
     return [
         {
             "recipe_id": rt.recipe_id,
+            "group": rt.group,
             "metric": rt.metric,
             "axes": [
                 {"axis": a.axis, "direction": a.direction,

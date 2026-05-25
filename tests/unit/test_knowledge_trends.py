@@ -86,3 +86,32 @@ def test_summarize_trends_real_5h_screw_patchcore():
     axes = {a.axis: a for a in summarize_trends(samples, "image_auroc")[0].axes}
     assert axes["memory_size"].direction == "increasing"
     assert axes["memory_size"].points[0] == (10000.0, 0.7465)
+
+
+def test_summarize_trends_separates_by_target_category():
+    # bottle(쉬움 1.0) vs screw(어려움) 섞임 — category 분리 안 하면 img가 허위로 보임.
+    # category(target)별 그룹으로 분리해야 각 category 안에서 참 추세가 나온다.
+    samples = [
+        _s("ef", {"img_size": 256, "category": "bottle"}, 1.0),
+        _s("ef", {"img_size": 384, "category": "bottle"}, 1.0),
+        _s("ef", {"img_size": 256, "category": "screw"}, 0.80),
+        _s("ef", {"img_size": 384, "category": "screw"}, 0.86),
+    ]
+    result = summarize_trends(samples, "image_auroc")  # group_axes 기본 ("category",)
+    by_cat = {rt.group.get("category"): rt for rt in result}
+    assert set(by_cat) == {"bottle", "screw"}
+    screw_axes = {a.axis: a for a in by_cat["screw"].axes}
+    assert screw_axes["img_size"].direction == "increasing"  # 256→0.80, 384→0.86
+    assert "category" not in screw_axes  # target 축은 추세 축이 아니라 그룹 기준
+
+
+def test_summarize_trends_aggregates_duplicate_axis_value_to_best():
+    # 같은 memory_size에 두 점(img 다름) → max로 집계해 confounding 완화
+    samples = [
+        _s("pc", {"memory_size": 50000, "img_size": 384}, 0.91),
+        _s("pc", {"memory_size": 50000, "img_size": 512}, 0.95),
+        _s("pc", {"memory_size": 100000, "img_size": 512}, 0.96),
+    ]
+    axes = {a.axis: a for a in summarize_trends(samples, "image_auroc")[0].axes}
+    assert axes["memory_size"].points == ((50000.0, 0.95), (100000.0, 0.96))
+    assert axes["memory_size"].direction == "increasing"
