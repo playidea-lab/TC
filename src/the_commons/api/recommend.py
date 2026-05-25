@@ -150,6 +150,12 @@ async def get_matchmaker_service(
     within_synth: WithinRecipeSynthesizer = Depends(get_within_synth),
     novelty_synth: NoveltyRecipeSynthesizer = Depends(get_novelty_synth),
 ) -> MatchmakerService:
+    if not settings.recommend_synthesis:
+        # KR7 격하: LLM 처방 비활성 — retrieve(로컬 임베딩)+유사도 후보만(처방 없음).
+        # 주경로는 환류(tc_knowledge/tc_lineage) 기반 에이전트 판단.
+        return MatchmakerService(
+            embedder=embedder, vector_index=vector_index, store=store
+        )
     return MatchmakerService(
         embedder=embedder,
         vector_index=vector_index,

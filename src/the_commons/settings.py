@@ -32,6 +32,11 @@ class Settings(BaseSettings):
         default="gemini",
         description="gemini | local(BGE-m3, LLM-free, 1024-dim 동일). 전환 시 corpus 전체 re-embed.",
     )
+    recommend_synthesis: bool = Field(
+        default=True,
+        description="추천 LLM 처방(synth/prior/reranker). False=KR7 격하: retrieve+유사도 후보만"
+        "(LLM-free). 주경로는 환류(tc_knowledge/tc_lineage) 기반 에이전트 판단.",
+    )
 
     # OpenAI — generation(synthesizer + infogain prior)용. Gemini quota 회피.
     # embedding은 차원 호환 위해 Gemini 유지 (전환 시 corpus 전체 re-embed 필요).
