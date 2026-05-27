@@ -16,6 +16,7 @@ from the_commons.reciprocity.event_store import (
     PostgresReciprocityEventStore,
     ReciprocityEventStore,
 )
+from the_commons.settings import settings
 
 # 모듈 전역 in-memory store — production은 dependency override 또는 Postgres 사용
 _inmemory_reciprocity = InMemoryReciprocityEventStore()
@@ -51,7 +52,12 @@ async def get_reciprocity_store(
 
 
 async def get_embedder() -> EmbeddingProvider:
-    """production embedder. test는 dependency_overrides로 교체."""
+    """production embedder. settings.embedding_provider=local이면 BGE-m3(LLM-free).
+    test는 dependency_overrides로 교체."""
+    if settings.embedding_provider == "local":
+        from the_commons.llm.local_embedding import shared_local_embedder
+
+        return shared_local_embedder()
     return GeminiEmbedding2Provider()
 
 

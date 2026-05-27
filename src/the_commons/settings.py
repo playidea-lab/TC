@@ -26,6 +26,15 @@ class Settings(BaseSettings):
     google_api_key: str = Field(default="", description="Google Generative AI API key")
     gemini_embedding_model: str = Field(default="gemini-embedding-2")
     gemini_reranker_model: str = Field(default="gemini-2.5-flash")
+    embedding_provider: str = Field(
+        default="gemini",
+        description="gemini | local(BGE-m3, LLM-free, 1024-dim). 전환 시 corpus 전체 re-embed.",
+    )
+
+    # OpenAI — generation(synthesizer + infogain prior)용. Gemini quota 회피.
+    # embedding은 차원 호환 위해 Gemini 유지 (전환 시 corpus 전체 re-embed 필요).
+    openai_api_key: str = Field(default="", description="OpenAI API key")
+    openai_model: str = Field(default="gpt-4o-mini")
 
     # CQ JWT
     cq_jwt_public_key_path: str = Field(default="", description="CQ가 발행한 JWT 검증용 공개키")
@@ -78,8 +87,7 @@ class Settings(BaseSettings):
         default=1_048_576,  # 1 MB
         ge=1024,
         description=(
-            "Content-Length가 이 한도 초과 시 413. "
-            "DoS·malformed body 방어용. 단위: bytes."
+            "Content-Length가 이 한도 초과 시 413. DoS·malformed body 방어용. 단위: bytes."
         ),
     )
 

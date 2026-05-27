@@ -1,7 +1,11 @@
-"""matchmaker service — recommend 흐름 orchestration.
+"""matchmaker service — LLM-free recommend 흐름.
 
-serialize query → embed → retrieve → fetch records → serialize each →
-listwise rerank → compose. cold start 또는 외부 LLM 실패 시 heuristic fallback.
+serialize query → embed(로컬 BGE-m3) → retrieve → fetch records → similarity 순서 →
+compose. cold start(corpus sparse 또는 embedder 실패) 시 heuristic fallback.
+
+LLM 처방(synthesizer/infogain prior/reranker)은 제거됐다(KR7 cleanup) — 추천은
+retrieve+유사도 후보 제시(처방 next_config 없음)이고, 판단은 환류(tc_knowledge/
+tc_lineage)를 읽은 에이전트가 한다. idea: tc-cumulative-knowledge.
 """
 
 from dataclasses import dataclass
@@ -10,7 +14,7 @@ import structlog
 
 from the_commons.library.models import Evidence
 from the_commons.library.store import EvidenceStore
-from the_commons.llm.protocol import EmbeddingProvider, LLMReranker, RankedCandidate
+from the_commons.llm.protocol import EmbeddingProvider, RankedCandidate
 from the_commons.matchmaker.composer import (
     ComposedCandidate,
     CorpusContext,
@@ -18,7 +22,6 @@ from the_commons.matchmaker.composer import (
     compose_candidates,
     summarize_corpus,
 )
-from the_commons.matchmaker.infogain.reranker import InfoGainReranker
 from the_commons.matchmaker.retriever import (
     RetrievedHit,
     VectorIndex,
@@ -41,36 +44,36 @@ class RecommendResult:
 
 
 class MatchmakerService:
-    """matchmaker 컴포넌트들의 orchestrator. 의존성은 생성 시 주입."""
+    """LLM-free recommend orchestrator — retrieve + 유사도 후보 제시(처방 없음)."""
 
     def __init__(
         self,
         *,
         embedder: EmbeddingProvider,
         vector_index: VectorIndex,
-        reranker: LLMReranker,
         store: EvidenceStore,
-        infogain_reranker: InfoGainReranker | None = None,
     ) -> None:
         self._embedder = embedder
         self._vector_index = vector_index
-        self._reranker = reranker
         self._store = store
-        # infogain_reranker 주입 시 step7은 정보이득 경로 (v0.1 listwise 대체).
-        # 미주입 시 기존 LLMReranker listwise 경로 유지 (degrade 계약 보존).
-        self._infogain = infogain_reranker
         self._registry = default_registry()
         self._template_version = settings.template_version
 
-    async def recommend(self, query: QueryFeatures) -> RecommendResult:
-        """end-to-end recommend 흐름. 외부 LLM 실패는 graceful degrade."""
-        # 1. serialize query
+    async def recommend(
+        self,
+        query: QueryFeatures,
+        *,
+        round_id: str | None = None,
+        force_explore: bool = False,
+    ) -> RecommendResult:
+        """retrieve + 유사도 후보. round_id/force_explore는 LLM 합성 제거로 미사용(호환)."""
+        _ = (round_id, force_explore)
         query_text = self._registry.serialize_query(query, version=self._template_version)
 
-        # 2. embed — 실패 시 cold-start fallback
+        # embed — 실패 시 cold-start fallback
         try:
             query_vector = await self._embedder.embed(query_text)
-        except Exception as exc:  # noqa: BLE001 — 외부 LLM 장애 대비
+        except Exception as exc:  # noqa: BLE001 — embedder 장애 대비
             logger.warning(
                 "embedder_failed",
                 error=str(exc),
@@ -79,64 +82,15 @@ class MatchmakerService:
             )
             return await self._cold_start(query)
 
-        # 3. retrieve top-K
         hits = await self._vector_index.search(query_vector, top_k=settings.retrieve_top_k)
-
-        # 4. cold start fallback
         if is_corpus_too_sparse(hits):
             return await self._cold_start(query)
 
-        # 5. fetch evidence records
         records = await self._fetch_evidence(hits)
-
-        # 6+7. rerank — 정보이득 경로(주입 시) 또는 기존 listwise.
-        #      어느 경로든 실패 시 similarity 순서로 graceful degrade.
-        if self._infogain is not None:
-            try:
-                ranked = await self._infogain.rerank(
-                    query_text, hits, records, settings.recommend_top_n
-                )
-            except Exception as exc:  # noqa: BLE001 — 외부/수치 장애 대비
-                logger.warning(
-                    "infogain_reranker_failed",
-                    error=str(exc),
-                    error_type=type(exc).__name__,
-                    fallback="similarity_order",
-                )
-                ranked = _similarity_ordered_ranking(
-                    hits, settings.recommend_top_n
-                )
-        else:
-            candidate_texts = [
-                self._registry.serialize_evidence(
-                    ev, version=self._template_version
-                )
-                for ev in records
-            ]
-            try:
-                ranked = await self._reranker.rerank(
-                    query=query_text,
-                    candidates=candidate_texts,
-                    top_n=settings.recommend_top_n,
-                )
-            except Exception as exc:  # noqa: BLE001
-                logger.warning(
-                    "reranker_failed",
-                    error=str(exc),
-                    error_type=type(exc).__name__,
-                    fallback="similarity_order",
-                )
-                ranked = _similarity_ordered_ranking(
-                    hits, settings.recommend_top_n
-                )
-
-        # 8. compose
+        ranked = _similarity_ordered_ranking(hits, settings.recommend_top_n)
         context = summarize_corpus(hits)
         confidence = classify_confidence(context, is_heuristic_fallback=False)
-        composed = compose_candidates(
-            ranked, fetched_evidence=records, confidence=confidence
-        )
-
+        composed = compose_candidates(ranked, fetched_evidence=records, confidence=confidence)
         return RecommendResult(
             corpus_context=context,
             candidates=composed,
@@ -153,16 +107,14 @@ class MatchmakerService:
         return records
 
     async def _cold_start(self, query: QueryFeatures) -> RecommendResult:
-        """corpus가 비어있거나 embedder가 죽었을 때 휴리스틱 후보 반환."""
-        modality = query.data_fingerprint.modality
-        intent_goal = query.intent.goal
+        """corpus가 비었거나 embedder가 죽었을 때 휴리스틱 후보 반환(처방 없음)."""
         heuristics = cold_start_candidates(
-            modality=modality, intent_goal=intent_goal, top_n=settings.recommend_top_n
+            modality=query.data_fingerprint.modality,
+            intent_goal=query.intent.goal,
+            top_n=settings.recommend_top_n,
         )
-
         context = CorpusContext(real_count=0, synthetic_count=0)
         confidence = classify_confidence(context, is_heuristic_fallback=True)
-
         composed = [
             ComposedCandidate(
                 recipe_id=h.recipe_id,
@@ -170,6 +122,8 @@ class MatchmakerService:
                 evidence_ids=[],
                 confidence=confidence,
                 reasoning=h.description,
+                next_config=None,
+                policy=None,
             )
             for h in heuristics
         ]
@@ -180,15 +134,13 @@ class MatchmakerService:
         )
 
 
-def _similarity_ordered_ranking(
-    hits: list[RetrievedHit], top_n: int
-) -> list[RankedCandidate]:
-    """reranker가 죽었을 때 vector cosine similarity로 fallback ranking."""
+def _similarity_ordered_ranking(hits: list[RetrievedHit], top_n: int) -> list[RankedCandidate]:
+    """vector cosine similarity 순서 ranking (LLM-free)."""
     return [
         RankedCandidate(
             index=i,
             score=hit.similarity,
-            reasoning="reranker unavailable — ranked by retrieval similarity",
+            reasoning="ranked by retrieval similarity",
         )
         for i, hit in enumerate(hits[:top_n])
     ]

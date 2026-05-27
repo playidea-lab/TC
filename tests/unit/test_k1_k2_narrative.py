@@ -20,7 +20,6 @@ from the_commons.api.dependencies import (
 )
 from the_commons.api.recommend import (
     get_embedder,
-    get_reranker,
     get_vector_index,
 )
 from the_commons.auth.dependencies import require_contributor
@@ -196,7 +195,6 @@ def narrative_setup():
     app.dependency_overrides[get_evidence_store] = _override_store
     app.dependency_overrides[get_reciprocity_store] = _override_reciprocity
     app.dependency_overrides[get_embedder] = _override_embedder
-    app.dependency_overrides[get_reranker] = _override_reranker
     app.dependency_overrides[get_vector_index] = _override_index
     app.dependency_overrides[require_contributor] = _override_claims
 
