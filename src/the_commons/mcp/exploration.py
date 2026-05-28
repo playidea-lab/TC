@@ -25,10 +25,27 @@ from the_commons.exploration.session import (
 def _recommend_action_impl(
     profile: str, *, epsilon: float = 0.4, budget: int = 30,
     seed_base: int | None = None, tasks: list[str] | None = None,
+    max_wallclock_seconds: int | None = None,
+    max_explosion_rounds: int | None = None,
+    max_total_rounds: int | None = None,
 ) -> dict[str, Any]:
-    """컨트롤러가 다음 행동을 추천한다(3-E 모드 + 부모 elite + 타깃 셀)."""
+    """컨트롤러가 다음 행동을 추천한다(3-E 모드 + 부모 elite + 타깃 셀).
+
+    V10 caps: 위반 시 mode='stop' action을 즉시 반환(컨트롤러 step() 호출 전).
+    None cap은 무제한. 호출자(에이전트)가 매 라운드 caps 넘겨 자율 종료 트리거.
+    """
     s = ExploreSession(profile, epsilon=epsilon, budget=budget,
                        seed_base=seed_base, tasks=tasks)
+    cap_reason = s.check_caps(
+        max_wallclock_seconds=max_wallclock_seconds,
+        max_explosion_rounds=max_explosion_rounds,
+        max_total_rounds=max_total_rounds,
+    )
+    if cap_reason:
+        # V10 stop emit — 컨트롤러 step 건너뜀, archive 갱신 없음
+        return {"mode": "stop", "task": "", "genotype": None,
+                "descriptor": [-1, -1], "seed": 0, "target": "elite",
+                "reason": cap_reason}
     action = s.controller.step()
     s.save()
     return action_to_dict(action)
@@ -46,6 +63,9 @@ def _report_result_impl(
     s = ExploreSession(profile)
     act = action_from_dict(action)
     s.controller.report(act, float(fitness))
+    # V10: explosion 모드 카운터 누적 (cap 검사 입력)
+    if act.kind == "explosion":
+        s.increment_explosion_rounds()
     s.save()
     # V12 attribution
     s.log_attribution({
@@ -110,18 +130,30 @@ def register(mcp) -> None:
     def tc_explore_recommend_action(
         profile: str, epsilon: float = 0.4, budget: int = 30,
         seed_base: int | None = None, tasks: list[str] | None = None,
+        max_wallclock_seconds: int | None = None,
+        max_explosion_rounds: int | None = None,
+        max_total_rounds: int | None = None,
     ) -> dict[str, Any]:
         """QD 컨트롤러가 다음 라운드의 행동을 추천한다.
 
         Args:
           profile: experiments/<profile>/profile.py가 있어야 함.
           epsilon, budget, seed_base, tasks: cold start 시(state 없을 때)만 사용.
+          max_wallclock_seconds, max_explosion_rounds, max_total_rounds:
+            V10 운영 cap. 위반 시 mode='stop' action 즉시 반환(컨트롤러 안 굴림).
+            None=무제한. 호출자가 매 라운드 동일하게 넘기는 게 안전.
 
         Returns:
           {mode, task, genotype, descriptor, seed, target, reason}
+          mode='stop'이면 reason에 cap 사유.
         """
-        return _recommend_action_impl(profile, epsilon=epsilon, budget=budget,
-                                      seed_base=seed_base, tasks=tasks)
+        return _recommend_action_impl(
+            profile, epsilon=epsilon, budget=budget,
+            seed_base=seed_base, tasks=tasks,
+            max_wallclock_seconds=max_wallclock_seconds,
+            max_explosion_rounds=max_explosion_rounds,
+            max_total_rounds=max_total_rounds,
+        )
 
     @mcp.tool()
     def tc_explore_report_result(
