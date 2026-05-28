@@ -239,6 +239,13 @@ async def _post_ingest_run(
 
 mcp = FastMCP("the-commons")
 
+# R1 Phase C — explore-loop QD + 디스패치 도구를 별도 모듈에서 등록(server.py 비대 회피)
+from the_commons.mcp.exploration import register as _register_exploration  # noqa: E402
+from the_commons.mcp.dispatch import register as _register_dispatch         # noqa: E402
+
+_register_exploration(mcp)
+_register_dispatch(mcp)
+
 
 @mcp.tool()
 async def tc_recommend(
