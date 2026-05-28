@@ -71,6 +71,9 @@ known-first-party = ["the_commons"]
 testpaths = ["tests"]
 asyncio_mode = "auto"
 addopts = "-v --strict-markers"
+# R1: experiments/는 도메인 팩(vendored 학습 코드 + profile 모듈). wheel에는 안 들어가지만
+# 테스트가 `from experiments.<domain>.profile import ...`로 import해야 하므로 sys.path에 추가.
+pythonpath = ["."]
 
 [tool.mypy]
 python_version = "3.12"
