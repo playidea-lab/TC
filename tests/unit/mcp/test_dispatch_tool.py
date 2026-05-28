@@ -5,7 +5,9 @@ from __future__ import annotations
 import unittest
 from unittest.mock import MagicMock, patch
 
-from the_commons.mcp.dispatch import _dispatch_impl
+from the_commons.dispatcher.cq_remote_worker import CqRemoteWorker
+from the_commons.dispatcher.local_worker import LocalWorker
+from the_commons.mcp.dispatch import _build_worker, _dispatch_impl
 
 
 class Test_dispatch_impl_BuildsJobSpecAndReturnsResultDict(unittest.TestCase):
@@ -78,3 +80,14 @@ class Test_dispatch_impl_BuildsJobSpecAndReturnsResultDict(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
+
+
+class Test_buildWorker_RoutingFlag(unittest.TestCase):
+    def test_remote_false_returns_local_worker(self):
+        self.assertIsInstance(_build_worker("p", "w", remote=False), LocalWorker)
+
+    def test_remote_true_returns_cq_remote_worker(self):
+        self.assertIsInstance(_build_worker("p", "w", remote=True), CqRemoteWorker)
+
+    def test_default_is_local_worker_for_mvtec_back_compat(self):
+        self.assertIsInstance(_build_worker("p", "w"), LocalWorker)

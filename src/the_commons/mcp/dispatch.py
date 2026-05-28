@@ -19,6 +19,7 @@ from dataclasses import asdict
 from typing import Any
 
 from the_commons.dispatcher import JobResult, JobSpec, dispatch
+from the_commons.dispatcher.cq_remote_worker import CqRemoteWorker
 from the_commons.dispatcher.local_worker import LocalWorker
 from the_commons.exploration.sandbox import (
     check_code as sandbox_check, is_blocked as sandbox_blocked,
@@ -36,13 +37,11 @@ def _job_result_to_dict(r: JobResult) -> dict[str, Any]:
     }
 
 
-def _build_worker(project_id: str, worker_id: str):
-    """worker_id 기반 Worker 구현 선택.
-
-    Phase C2: LocalWorker만. CqRemoteWorker는 Phase D2에서.
-    구분은 환경/메타 기반: cq에서 워커 host == 로컬이면 LocalWorker, 아니면 원격 필요.
-    당장은 LocalWorker만 — 원격 GPU(4090/3090) 사용은 D2 이후.
-    """
+def _build_worker(project_id: str, worker_id: str, remote: bool = False):
+    """worker_id 기반 Worker 구현 선택. remote=True면 CqRemoteWorker(원격 GPU),
+    아니면 LocalWorker(워커=노트북, 공유 파일시스템). 호출자가 명시적으로 결정."""
+    if remote:
+        return CqRemoteWorker(project_id=project_id, worker_id=worker_id)
     return LocalWorker(project_id=project_id, worker_id=worker_id)
 
 
@@ -54,6 +53,7 @@ def _dispatch_impl(
     metric_keys: list[str] | None = None,
     requirements: list[str] | None = None,
     timeout: int = 1200,
+    remote: bool = False,
 ) -> dict[str, Any]:
     """JobSpec 조립 → 워커 dispatch → JobResult dict."""
     # V8 sandbox 게이트: 디스패치 전 정적 검사 — 위반 시 GPU 비용 0으로 즉시 실패 반환.
@@ -74,7 +74,7 @@ def _dispatch_impl(
         metric_keys=metric_keys or [monitor], requirements=requirements or [],
         timeout=timeout,
     )
-    worker = _build_worker(project_id, worker_id)
+    worker = _build_worker(project_id, worker_id, remote=remote)
     try:
         result = dispatch(worker, spec)
     finally:
@@ -94,6 +94,7 @@ def register(mcp) -> None:
         metric_keys: list[str] | None = None,
         requirements: list[str] | None = None,
         timeout: int = 1200,
+        remote: bool = False,
     ) -> dict[str, Any]:
         """cq 워커에 코드 디스패치 + 결과 회수.
 
@@ -109,6 +110,8 @@ def register(mcp) -> None:
           metric_keys: 회수 metric 키 (기본 [monitor]).
           requirements: pip reqs(uv run --with).
           timeout: poll 최대 대기(초).
+          remote: True면 CqRemoteWorker(원격 GPU, NATS로 파일 입출력), False면
+                  LocalWorker(워커=노트북, 공유 파일시스템). 기본 False(mvtec 후방호환).
 
         Returns:
           {job_id, workspace_id, success, fitness, metrics, describe,
@@ -118,7 +121,7 @@ def register(mcp) -> None:
             profile, project_id=project_id, worker_id=worker_id,
             name=name, code=code, command=command, monitor=monitor,
             aux_files=aux_files, config=config, metric_keys=metric_keys,
-            requirements=requirements, timeout=timeout,
+            requirements=requirements, timeout=timeout, remote=remote,
         )
 
 
