@@ -12,6 +12,7 @@ from __future__ import annotations
 import importlib
 import json
 import os
+import time
 from dataclasses import asdict, is_dataclass
 from pathlib import Path
 from typing import Any
@@ -93,7 +94,34 @@ class ExploreSession:
             seed_base=seed_base if seed_base is not None else 20260528,
         )
         self._tasks = tasks if tasks is not None else getattr(self.profile, "DEFAULT_TASKS", ["default"])
+        # V10 운영 카운터 (state에 영속): cold start면 now, restore면 보존
+        self.started_at: float = time.time()
+        self.explosion_rounds: int = 0
         self.controller: MapElitesController = self._build_or_restore()
+
+    def check_caps(self, *, max_wallclock_seconds: int | None = None,
+                   max_explosion_rounds: int | None = None,
+                   max_total_rounds: int | None = None) -> str | None:
+        """V10 운영 cap 검사. 위반 시 사유 문자열 반환(stop 트리거), 정상이면 None.
+
+        None cap은 무제한. 호출자(에이전트)가 라운드별로 caps를 넘기고, 위반 시
+        recommend_action이 mode=stop을 emit해 /loop을 자율 종료시킨다.
+        """
+        if max_total_rounds is not None and self.controller.round >= max_total_rounds:
+            return f"cap reached: max_total_rounds={max_total_rounds} (round={self.controller.round})"
+        if max_explosion_rounds is not None and self.explosion_rounds >= max_explosion_rounds:
+            return (f"cap reached: max_explosion_rounds={max_explosion_rounds} "
+                    f"(explosion_rounds={self.explosion_rounds})")
+        if max_wallclock_seconds is not None:
+            elapsed = time.time() - self.started_at
+            if elapsed >= max_wallclock_seconds:
+                return (f"cap reached: max_wallclock_seconds={max_wallclock_seconds} "
+                        f"(elapsed={elapsed:.0f}s)")
+        return None
+
+    def increment_explosion_rounds(self) -> None:
+        """report_result이 mode=explosion이면 호출 — V10 cap 누적."""
+        self.explosion_rounds += 1
 
     def _build_or_restore(self) -> MapElitesController:
         sp = _state_path(self.profile_name)
@@ -103,11 +131,19 @@ class ExploreSession:
         if sp.exists():
             state = json.loads(sp.read_text(encoding="utf-8"))
             _restore(ctrl, state)
+            # V10 운영 카운터 복원 (없으면 cold-start 기본 유지)
+            if "started_at" in state:
+                self.started_at = float(state["started_at"])
+            if "explosion_rounds" in state:
+                self.explosion_rounds = int(state["explosion_rounds"])
         return ctrl
 
     def save(self) -> None:
         sp = _state_path(self.profile_name)
         state = _dump(self.controller, self.profile_name, self._tasks)
+        # V10 운영 카운터 영속
+        state["started_at"] = self.started_at
+        state["explosion_rounds"] = self.explosion_rounds
         sp.write_text(json.dumps(state, ensure_ascii=False, indent=2), encoding="utf-8")
 
     def log_attribution(self, record: dict[str, Any]) -> None:
