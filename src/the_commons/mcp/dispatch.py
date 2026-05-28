@@ -20,6 +20,10 @@ from typing import Any
 
 from the_commons.dispatcher import JobResult, JobSpec, dispatch
 from the_commons.dispatcher.local_worker import LocalWorker
+from the_commons.exploration.sandbox import (
+    check_code as sandbox_check, is_blocked as sandbox_blocked,
+    violations_to_dict,
+)
 
 
 def _job_result_to_dict(r: JobResult) -> dict[str, Any]:
@@ -52,6 +56,18 @@ def _dispatch_impl(
     timeout: int = 1200,
 ) -> dict[str, Any]:
     """JobSpec 조립 → 워커 dispatch → JobResult dict."""
+    # V8 sandbox 게이트: 디스패치 전 정적 검사 — 위반 시 GPU 비용 0으로 즉시 실패 반환.
+    violations = sandbox_check(code)
+    if sandbox_blocked(violations):
+        first = next(v for v in violations if v.severity == "block")
+        return {
+            "job_id": "", "workspace_id": "",
+            "success": False, "fitness": None, "metrics": {},
+            "describe": None, "stderr_tail": "",
+            "error": f"sandbox blocked ({first.rule}@L{first.line}): {first.message}",
+            "sandbox_violations": violations_to_dict(violations),
+        }
+
     spec = JobSpec(
         name=name, code=code, command=command, monitor=monitor,
         aux_files=aux_files or {}, config=config or {},
