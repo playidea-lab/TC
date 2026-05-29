@@ -18,4 +18,4 @@ docs/
 scripts/
 .cq/
 .claude/
-README.md
+# README.md는 Dockerfile COPY 대상(hatchling 빌드) — 제외 금지

@@ -44,6 +44,10 @@ RUN groupadd --system commons && useradd --system --gid commons commons
 COPY --from=builder --chown=commons:commons /app/.venv ./.venv
 COPY --from=builder --chown=commons:commons /app/src ./src
 
+# JWT 검증용 공개키(비밀 아님 — CQ 발급 토큰 검증). dev 배포: 이미지에 포함.
+# prod 승격 시 secret/volume으로 교체(키 회전). 빌드 컨텍스트 deploy/cq_pub.pem.
+COPY --chown=commons:commons deploy/cq_pub.pem /app/cq_pub.pem
+
 ENV PATH="/app/.venv/bin:$PATH" \
     PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1

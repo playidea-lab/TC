@@ -51,3 +51,6 @@ docker-compose.override.yml
 data/
 *.csv
 *.parquet
+
+# fly 배포용 공개키(빌드 컨텍스트, repo 커밋 제외)
+deploy/cq_pub.pem
