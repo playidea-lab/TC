@@ -1,5 +1,7 @@
 # The Commons — v0.1 Success Metrics Cycle
 
+> 📍 **현 정체성 SSOT는 [docs/IDENTITY.md] 다.** 이 문서는 그 정체성에 이른 *역사적 결정 과정*(사이클 기록)이다 — 현재 정의가 아니라 어떻게 거기 왔는지의 기록.
+
 > v0.1이 *동작했다*는 증거의 정의. 3가지 vision event를 정성적 임계값으로, 3개월 측정 기간.
 
 ## 왜 이 아이디어인가

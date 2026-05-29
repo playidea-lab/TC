@@ -1,5 +1,7 @@
 # The Commons — Vision Refinement Cycle
 
+> 📍 **현 정체성 SSOT는 [docs/IDENTITY.md] 다.** 이 문서는 그 정체성에 이른 *역사적 결정 과정*(사이클 기록)이다 — 현재 정의가 아니라 어떻게 거기 왔는지의 기록.
+
 > ⚠️ **거버넌스 정정 (2026-05-19, 사용자 권위):** 이 카드의 거버넌스
 > 결정(#3 "분사 약속 약화", #거버넌스 "사유 자산 아님 / evidence는
 > contributor 귀속 / CDLA / 사유화·재라이선싱 불가 / 무료 read")은
