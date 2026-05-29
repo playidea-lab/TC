@@ -54,11 +54,15 @@ def _recommend_action_impl(
 def _report_result_impl(
     profile: str, action: dict[str, Any], fitness: float,
     *, code: str = "", stderr_tail: str = "", attribution: dict | None = None,
+    diag: dict | None = None, ingest: bool = True,
 ) -> dict[str, Any]:
-    """에이전트가 평가 결과를 보고 → 컨트롤러 placement.
+    """에이전트가 평가 결과를 보고 → 컨트롤러 placement (+ TC corpus best-effort 적재).
 
     fitness는 max convention (낮을수록 좋은 metric은 caller가 부호 반전).
     code/stderr_tail/attribution은 V12 attribution log 입력(forensic 디버그용).
+    diag(미검/과검 등 진단 metric)는 corpus 적재 시 evidence metrics에 동봉.
+    ingest=True면 placement 후 dispatch 결과를 TC evidence corpus에 best-effort 적재
+    (도서관·사서 폐루프). TC 서버 미가동 시 조용히 넘김 — 탐색 archive는 영향 없음.
     """
     s = ExploreSession(profile)
     act = action_from_dict(action)
@@ -67,11 +71,25 @@ def _report_result_impl(
     if act.kind == "explosion":
         s.increment_explosion_rounds()
     s.save()
+
+    # TC corpus best-effort 적재 — 탐색 archive(로컬)와 corpus(영속·누적지식) 폐루프
+    corpus_evidence_id = None
+    if ingest and act.genotype is not None:
+        from the_commons.exploration.corpus_ingest import try_ingest
+        corpus_evidence_id = try_ingest(
+            recipe_id=act.genotype.recipe,
+            hyperparams=act.genotype.as_dict(),
+            primary_metric=getattr(s.profile, "METRIC", "image_auroc"),
+            fitness=float(fitness),
+            diag=diag or {},
+            modality=getattr(s.profile, "MODALITY", "vision"),
+        )
+
     # V12 attribution
     s.log_attribution({
         "round": s.controller.round, "action": action, "fitness": float(fitness),
         "code_len": len(code), "stderr_tail": stderr_tail[:1000] if stderr_tail else "",
-        "attribution": attribution or {},
+        "attribution": attribution or {}, "corpus_evidence_id": corpus_evidence_id,
     })
     return {"ok": True, "round": s.controller.round,
             "n_cells": len(s.controller.archive),
@@ -159,14 +177,17 @@ def register(mcp) -> None:
     def tc_explore_report_result(
         profile: str, action: dict[str, Any], fitness: float,
         code: str = "", stderr_tail: str = "", attribution: dict | None = None,
+        diag: dict | None = None, ingest: bool = True,
     ) -> dict[str, Any]:
-        """평가 결과를 컨트롤러에 보고 → placement + attribution 영속.
+        """평가 결과를 컨트롤러에 보고 → placement + attribution 영속 + corpus 적재.
 
         fitness는 max convention. min metric(bpb)은 caller가 부호 반전(-bpb)해 전달.
+        diag: 진단 metric(miss_rate/over_rate 등) — corpus evidence에 동봉.
+        ingest=True면 TC evidence corpus에 best-effort 적재(도서관·사서 폐루프).
         """
         return _report_result_impl(profile, action, fitness,
                                    code=code, stderr_tail=stderr_tail,
-                                   attribution=attribution)
+                                   attribution=attribution, diag=diag, ingest=ingest)
 
     @mcp.tool()
     def tc_explore_archive_state(profile: str) -> dict[str, Any]:
