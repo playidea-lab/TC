@@ -1,31 +1,41 @@
 # The Commons
 
-> A cross-user match-maker for ML experiments, backed by an evidence library.
+> A cumulative-learning research engine for ML experiments.
+> Give it a problem (data + constraints) as a **profile**; it explores the
+> solution space autonomously, accumulates evidence in an immutable library,
+> and gets *stronger over time* by inducing knowledge from that corpus.
 >
-> Books are written in the **pcq** format. Most are produced by the **cq** service.
-> The Commons keeps them — and tells you which experiment to run next.
-> PI Lab operates the platform; contributors earn attribution and mileage.
+> Evidence is written in the **pcq** format, executed by the **cq** service,
+> kept and reasoned over by The Commons. PI Lab operates the platform;
+> contributors earn attribution and mileage.
+
+> **정체성 SSOT: [`docs/IDENTITY.md`](IDENTITY.md)** — TC가 무엇인가의 권위 출처.
+> 아래는 그 요약이다.
 
 ---
 
 ## What This Is
 
-A PI Lab–operated library of *raw experiment evidence* (`run_record.json` and its
-kin), contributed by humans and agents, organized for discovery, and preserved
-including **null and negative results** — the kind of evidence that disappears
-everywhere else.
+The Commons is **three roles over one corpus**:
 
-Wikipedia proved that a collective body of knowledge can be built by humans and
-bots working under the same audit trail. The Commons applies that model to
-machine-learning experiments — but the corpus is the *mechanism*, not the end.
-The end is the **match-maker**: given a problem and the resources at hand, it
-ranks the **next experiment that most reduces uncertainty about that problem
-region** — an *information-gain* objective, not an expected-metric leaderboard.
-This is why null and negative evidence is first-class: "what did not work"
-narrows the search space as much as what did.
+1. **Library** — an immutable store of *raw experiment evidence*, contributed by
+   humans and agents, preserving **null and negative results** first-class
+   (what did *not* work narrows the search space as much as what did).
+2. **Librarian** — `tc_knowledge` induces *trends* from that corpus by pure
+   computation (LLM-free): "capacity↑ → metric↑, up to here." It states facts,
+   never prescribes — judgment stays with the context-rich agent.
+3. **Exploration substrate** — it hosts a deterministic Quality-Diversity
+   controller and persists its archive, so an agent (Claude Code + `/loop`) can
+   explore a problem autonomously and *illuminate* the trade-off space rather
+   than chase a single optimum.
 
-The library exists so the match-maker is good. The match-maker is the role;
-the library is how it earns its recommendations.
+A new problem is just **a new profile** — the core never changes. Proven across
+three very different domains (image anomaly detection, LLM code-evolution,
+industrial defect inspection) on the same engine.
+
+The corpus is persistent (fly + Supabase), so knowledge outlives any session or
+operator. Full identity, boundaries, and the falsifiable core hypothesis:
+**[`docs/IDENTITY.md`](IDENTITY.md)**.
 
 ---
 
