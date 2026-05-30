@@ -63,8 +63,21 @@ class CqMcpClient:
         self._proc.stdin.write(json.dumps({"jsonrpc": "2.0", "method": method, "params": params}) + "\n")
         self._proc.stdin.flush()
 
+    # cq MCP 도구명이 v1.0.2x에서 snake_case → "Title Case"로 바뀜(2026-05-29).
+    # 호출부(local/remote worker)는 옛 이름을 쓰고, 여기서 새 이름으로 변환(단일 지점).
+    _TOOL_ALIAS = {
+        "create_job": "Create job",
+        "create_run": "Create run",
+        "control_job": "Control job",
+        "write_file": "Worker write",
+        "read_file": "Worker read",
+        "get_status": "Get job",
+        "get_worker": "Get worker",
+    }
+
     def call(self, name: str, args: dict) -> str:
-        r = self._rpc("tools/call", {"name": name, "arguments": args})
+        tool = self._TOOL_ALIAS.get(name, name)
+        r = self._rpc("tools/call", {"name": tool, "arguments": args})
         content = (r or {}).get("result", {}).get("content", [])
         return content[0]["text"] if content else json.dumps(r)
 
@@ -77,7 +90,7 @@ class CqMcpClient:
         last = ""
         while time.time() < deadline:
             time.sleep(8)
-            last = self.call("get_status", {"resource": "job", "id": job_id})
+            last = self.call("get_status", {"job_id": job_id})   # → "Get job"(별칭)
             s = (re.search(r"status:\s*(\w+)", last) or [None, "?"])[1]
             if s in ("SUCCEEDED", "FAILED", "COMPLETED", "ERROR", "CANCELLED"):
                 return last

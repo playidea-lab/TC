@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import os
 from dataclasses import asdict
+from pathlib import Path  # noqa: F401  (tc_dispatch_action 자동조립에서 사용)
 from typing import Any
 
 from the_commons.dispatcher import JobResult, JobSpec, dispatch
@@ -82,6 +83,53 @@ def _dispatch_impl(
     return _job_result_to_dict(result)
 
 
+class _GenoView:
+    """recommend dict의 genotype을 build_inject가 기대하는 .as_dict()로 노출."""
+
+    def __init__(self, g: dict[str, Any]) -> None:
+        self._c = dict(g["config"])      # config는 dict 또는 [[k,v],...] 둘 다 수용
+
+    def as_dict(self) -> dict[str, float]:
+        return dict(self._c)
+
+
+class _ActionView:
+    """build_inject(action)가 기대하는 .genotype·.seed 인터페이스(recommend dict 래핑)."""
+
+    def __init__(self, action: dict[str, Any]) -> None:
+        self.seed = int(action.get("seed", 0))
+        self.genotype = _GenoView(action["genotype"])
+
+
+def _dispatch_action_impl(
+    profile: str, action: dict[str, Any], *, project_id: str, worker_id: str,
+    name: str | None = None, remote: bool = False, timeout: int = 2700,
+) -> dict[str, Any]:
+    """profile + action(recommend 출력)만으로 dispatch 재료를 서버측 자동조립 후 디스패치.
+
+    SKILL(Claude)은 파이썬 함수(RECIPE_SCRIPT·AUX·build_inject·build_command)를 실행 못
+    하므로, 서버가 profile을 로드해 JobSpec을 구성한다(driver가 손으로 하던 조립 이식).
+    tier2(새 recipe)면 호출자가 action.genotype을 새 recipe로 교체해 보낸 것을 그대로 쓴다.
+    """
+    from the_commons.exploration.session import load_profile
+    P = load_profile(profile)
+    geno = action["genotype"]
+    recipe = geno["recipe"]
+    code = Path(P.RECIPE_SCRIPT[recipe]).read_text()
+    aux = {Path(f).name: Path(f).read_text() for f in getattr(P, "AUX_FILES", [])}
+    inject = P.build_inject(_ActionView(action))
+    config: dict[str, Any] = {"output_dir": ".", "monitor": P.MONITOR, "mode": "max", **inject}
+    if hasattr(P, "DATA_ROOT"):
+        config["data_root"] = P.DATA_ROOT
+    job_name = name or f"{profile}-{P.recipe_arg(recipe)}"
+    return _dispatch_impl(
+        profile, project_id=project_id, worker_id=worker_id, name=job_name,
+        code=code, command=P.build_command(), monitor=P.MONITOR,
+        aux_files=aux, config=config, metric_keys=[P.METRIC],
+        requirements=getattr(P, "REQS", []), timeout=timeout, remote=remote,
+    )
+
+
 def register(mcp) -> None:
     """FastMCP에 tc_dispatch 도구 등록."""
 
@@ -124,5 +172,21 @@ def register(mcp) -> None:
             requirements=requirements, timeout=timeout, remote=remote,
         )
 
+    @mcp.tool()
+    def tc_dispatch_action(
+        profile: str, action: dict[str, Any], project_id: str, worker_id: str,
+        name: str | None = None, remote: bool = False, timeout: int = 2700,
+    ) -> dict[str, Any]:
+        """profile + action(recommend 출력)만으로 자동조립 디스패치(SKILL을 얇게).
 
-__all__ = ["register", "_dispatch_impl"]
+        per-round SKILL은 recommend → tc_dispatch_action → report 3단계로 축소된다.
+        서버가 profile에서 RECIPE_SCRIPT·AUX·build_inject·build_command를 조립한다.
+        tier2면 호출자가 action.genotype을 새 recipe로 교체해 보낸다.
+        """
+        return _dispatch_action_impl(
+            profile, action, project_id=project_id, worker_id=worker_id,
+            name=name, remote=remote, timeout=timeout,
+        )
+
+
+__all__ = ["register", "_dispatch_impl", "_dispatch_action_impl"]
