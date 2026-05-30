@@ -322,5 +322,36 @@ class Test_cohenD(unittest.TestCase):
         self.assertGreater(d, 0.8)
 
 
+class Test_tier2_AuthorDelegation(unittest.TestCase):
+    """coverage 소진 시 컨트롤러가 새 recipe 저술을 에이전트(LLM)에 위임(explore_tier2)."""
+
+    def _mk(self, max_tier2: int = 3) -> MapElitesController:
+        # pool=단일 genotype, mutate=항등(변이 안 함) → tier1·exploit 둘 다 즉시 소진
+        pool = {"screw": [Genotype.of("patchcore", {"memory": 1000.0, "loc": 2.0})]}
+        cfg = ControllerConfig(epsilon=0.5, budget=50, seed_base=1, max_tier2=max_tier2)
+        return MapElitesController(cfg, bin_rule, ["screw"], pool, mutate_fn=lambda g: g)
+
+    def test_tier2_emitted_when_grid_exhausted(self) -> None:
+        ctrl = self._mk()
+        a1 = ctrl.step()
+        self.assertEqual(a1.kind, "explore_tier1")
+        ctrl.report(a1, landscape(a1))               # 유일 셀 채움
+        a2 = ctrl.step()                             # pool 소진 + exploit 막힘 → tier2
+        self.assertEqual(a2.kind, "explore_tier2")
+        self.assertEqual(a2.genotype, a1.genotype)   # best elite를 출발점으로 위임
+
+    def test_tier2_respects_cap_then_stops(self) -> None:
+        ctrl = self._mk(max_tier2=2)
+        a1 = ctrl.step()
+        ctrl.report(a1, landscape(a1))
+        kinds = [ctrl.step().kind for _ in range(3)]  # report 안 함 → tier2 cap 소진 후 stop
+        self.assertEqual(kinds, ["explore_tier2", "explore_tier2", "stop"])
+
+    def test_tier2_skipped_when_no_elite(self) -> None:
+        ctrl = self._mk()
+        self.assertIsNone(ctrl._best_elite())        # 아직 평가 전 — archive 비어있음
+        self.assertIsNone(ctrl._tier2())             # 위임 출발점 없음 → None(→ stop)
+
+
 if __name__ == "__main__":
     unittest.main(verbosity=2)

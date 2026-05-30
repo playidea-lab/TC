@@ -79,7 +79,7 @@ class Cell:
 class Action:
     """컨트롤러가 호출자에게 지시하는 다음 평가 행동."""
 
-    kind: str                      # exploit_within | explore_tier1 | reeval | stop
+    kind: str                      # exploit_within | explore_tier1 | explore_tier2 | reeval | stop
     task: str = ""
     genotype: Optional[Genotype] = None
     descriptor: tuple[int, int] = (-1, -1)
@@ -120,6 +120,7 @@ class ControllerConfig:
     epsilon: float = 0.3
     budget: int = 40
     seed_base: int = 0
+    max_tier2: int = 8               # coverage 소진 후 새 recipe 저술 위임 상한(무한 위임 방지)
 
 
 class MapElitesController:
@@ -147,6 +148,7 @@ class MapElitesController:
         self.universals: list[dict] = []
         self.round = 0
         self.rng = random.Random(config.seed_base)
+        self.tier2_count = 0                       # Tier2(새 recipe 저술) 위임 누적 — max_tier2 cap
 
     # -- 공개 API ----------------------------------------------------------
 
@@ -165,8 +167,11 @@ class MapElitesController:
             act = fn()
             if act is not None:
                 return act
-        # implemented 격자 소진 — 에이전트가 Tier2/3로 새 recipe 저술해 pool 확장해야(SKILL.md §1.3)
-        return Action(kind="stop", reason="coverage exhausted (implemented recipes)")
+        # implemented 격자 소진 — Tier2: 에이전트(LLM)에게 새 recipe 저술 위임(SKILL §2c)
+        tier2 = self._tier2()
+        if tier2 is not None:
+            return tier2
+        return Action(kind="stop", reason="coverage exhausted (implemented recipes + tier2 cap)")
 
     def report(self, action: Action, fitness: float) -> None:
         """평가 결과를 archive에 반영(분산인지 placement) 후 보편 가설 갱신."""
@@ -227,6 +232,38 @@ class MapElitesController:
         return Action(kind="explore_tier1", task=task, genotype=pick,
                       descriptor=self.bin_rule(pick), seed=self._seed(task, pick),
                       reason="cold start")
+
+    def _best_elite(self) -> Optional[tuple[str, Genotype, tuple[int, int]]]:
+        """archive에서 최고 fitness elite (task, genotype, descriptor)를 찾는다.
+
+        Tier2 위임의 출발점 — 에이전트가 이 elite를 보고 더 나은 새 recipe를 저술한다.
+        elite 없으면(cold archive) None.
+        """
+        best: Optional[tuple[str, Genotype, tuple[int, int]]] = None
+        best_m = float("-inf")
+        for key, cell in self.archive.items():
+            if cell.elite is not None and cell.elite_mean() > best_m:
+                best_m = cell.elite_mean()
+                best = (key[0], cell.elite, cell.descriptor)
+        return best
+
+    def _tier2(self) -> Optional[Action]:
+        """기존 recipe 격자 소진 → 에이전트에게 새 recipe 저술 위임(SKILL §2c).
+
+        컨트롤러는 새 코드를 못 짜므로(결정론), best elite를 출발점으로 주고 호출자(LLM)가
+        새 패러다임을 저술한다. 호출자는 report 시 action.genotype·descriptor를 새 recipe의
+        것으로 교체해 보낸다 → placement는 정상. max_tier2 도달 시 None(→ stop).
+        """
+        if self.tier2_count >= self.cfg.max_tier2:
+            return None
+        best = self._best_elite()
+        if best is None:                            # cold archive — 위임할 출발점 없음
+            return None
+        self.tier2_count += 1
+        task, geno, desc = best
+        return Action(kind="explore_tier2", task=task, genotype=geno, descriptor=desc,
+                      seed=self._seed(task, geno),
+                      reason="coverage exhausted → author new recipe paradigm from best elite")
 
     # -- placement (RE7) + adaptive sampling (RE6) -------------------------
 
