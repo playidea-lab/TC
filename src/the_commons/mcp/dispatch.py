@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import os
 from dataclasses import asdict
+from pathlib import Path  # noqa: F401  (tc_dispatch_action 자동조립에서 사용)
 from typing import Any
 
 from the_commons.dispatcher import JobResult, JobSpec, dispatch
