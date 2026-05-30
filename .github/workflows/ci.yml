@@ -1,0 +1,56 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    name: unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Install Python 3.12
+        run: uv python install 3.12
+
+      - name: Install dependencies
+        run: uv sync --frozen
+
+      # 단위 테스트는 외부 의존성(GOOGLE_API_KEY / Postgres) 없이 통과해야 한다.
+      # conftest의 기본 fake embedder + InMemory store 덕에 키 없이 green.
+      # integration 테스트(tests/integration)는 실 DB/Gemini가 필요하므로 제외.
+      - name: Run unit tests
+        run: uv run pytest tests/unit
+
+  lint:
+    name: ruff (informational)
+    runs-on: ubuntu-latest
+    # 저장소가 아직 ruff 전면 정리 전이라 lint는 비차단(정보성)으로 둔다.
+    # 점진적으로 정리되면 이 job을 required gate로 승격할 수 있다.
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install uv
+        uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+
+      - name: Install Python 3.12
+        run: uv python install 3.12
+
+      - name: Install dependencies
+        run: uv sync --frozen
+
+      - name: Ruff lint
+        run: uv run ruff check .
+
+      - name: Ruff format check
+        run: uv run ruff format --check .
